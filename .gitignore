@@ -1,0 +1,12 @@
+*.sln
+*.vcxproj
+*.vcxproj.user
+*.vcxproj.filters
+
+*.ipch
+.vs
+.vscode
+
+PLAN.md
+
+build/
