@@ -1,9 +1,9 @@
-#include "memory.h"
+#include "memory/memory.hpp"
 
 #include <algorithm>
 #include <assert.h>
 
-#include "logger.h"
+#include "core/log.h"
 
 std::unique_ptr<MemoryManager> MemoryManager::s_instance = nullptr;
 std::mutex MemoryManager::s_instance_mutex;
@@ -96,7 +96,7 @@ void *MemoryManager::alloc(size_t size_in_bytes, Lifetime lt, Tag tag, const cha
             allocator_ptr = &permanent_allocator;
             break;
         }
-        case SMART_MANAGED: 
+        case SCOPED: 
         case USER_MANAGED: {
 
             if (tag == RESOURCE) {
@@ -236,25 +236,26 @@ void MemoryManager::print_stats() const
 {
     auto stats = get_stats();
 
-    LOG_INFO("=== Memory Manager Stats ===");
-    LOG_INFO("Total Allocated: {} KB", stats.total_allocated / 1024.0f);
-    LOG_INFO("Frame: {}/{} KB ({})", 
+    KS_LOG_INFO("=== Memory Manager Stats ===");
+    KS_LOG_INFO("Total Allocated: {} KB", stats.total_allocated / 1024.0f);
+    KS_LOG_INFO("Frame: {}/{} KB ({})", 
            stats.frame_used / 1024, stats.frame_capacity / 1024,
            (float)stats.frame_used / stats.frame_capacity * 100.0f);
-    LOG_INFO("Permanent: {} KB", stats.permanent_allocated / 1024.0f);
-    LOG_INFO("Resource Pools: {}/{} KB ({})",
+    KS_LOG_INFO("Permanent: {} KB", stats.permanent_allocated / 1024.0f);
+    KS_LOG_INFO("Resource Pools: {}/{} KB ({})",
            stats.resource_pools_used / 1024, stats.resource_pools_capacity / 1024,
            (float)stats.resource_pools_used / stats.resource_pools_capacity * 100.0f);
     
     const char* tag_names[] = {"SYSTEM_DATA", "RESOURCE", "SCRIPT"};
-    LOG_INFO("By Tag:");
+    KS_LOG_INFO("By Tag:");
+
     for (int i = 0; i < TAG_COUNT; ++i) {
         if (stats.tag_stats[i].count > 0) {
-            LOG_INFO("  {}: {} allocations, {} KB", 
+            KS_LOG_INFO("  {}: {} allocations, {} KB", 
                    tag_names[i], stats.tag_stats[i].count, stats.tag_stats[i].total_size / 1024.0f);
         }
     }
-    LOG_INFO("============================");
+    KS_LOG_INFO("============================");
 }
 
 void MemoryManager::safe_cleanup() {
@@ -286,7 +287,7 @@ void MemoryManager::cleanup_user_managed_allocations() {
     }
 }
 
-MemoryManager::PoolAllocator *MemoryManager::find_suitable_pool(size_t size)
+PoolAllocator *MemoryManager::find_suitable_pool(size_t size)
 {
     for (auto& pool : resource_pools) {
         if (pool->get_block_size() >= size && pool->get_free_count() > 0) {
@@ -318,196 +319,9 @@ void MemoryManager::untrack_allocation(void *ptr)
     allocation_map.erase(ptr);
 }
 
-MemoryManager::ArenaAllocator::ArenaAllocator(size_t arena_size) : 
-    size(arena_size), offset(0), owns_memory(true)
-{
-    data = new uint8_t[arena_size];
-}
 
-MemoryManager::ArenaAllocator::ArenaAllocator(void *memory, size_t arena_size) : 
-    data(static_cast<uint8_t*>(memory)), size(arena_size), offset(0), owns_memory(false)
-{
 
-}
 
-MemoryManager::ArenaAllocator::~ArenaAllocator()
-{   
-    if (data && owns_memory && !MemoryManager::s_shutdown_flag.load()) {
-        try {
-            delete[] data;
-        } catch (...) {
-            LOG_ERROR("Failed to delete arena data during destruction");
-        }
-        data = nullptr;
-    }
-}
 
-void *MemoryManager::ArenaAllocator::allocate(size_t bytes, size_t alignment){
-    size_t aligned_offset = (offset + alignment - 1) & ~(alignment - 1);
 
-    if (aligned_offset + bytes > size) {
-        return nullptr; // Out of memory
-    }
 
-    void* ptr = data + aligned_offset;
-    offset = aligned_offset + bytes;
-    return ptr;
-}
-
-void MemoryManager::ArenaAllocator::reset(){
-    offset = 0;
-}
-
-size_t MemoryManager::ArenaAllocator::get_used_memory() const
-{
-    return offset;
-}
-
-size_t MemoryManager::ArenaAllocator::get_free_memory() const
-{
-    return size - offset;
-}
-
-size_t MemoryManager::ArenaAllocator::get_capacity() const
-{
-    return size;
-}
-
-void MemoryManager::PoolAllocator::initialize_free_list()
-{
-    free_list = nullptr;
-
-    for (size_t i = block_count; i > 0; --i) {
-        FreeBlock* block = reinterpret_cast<FreeBlock*>(buffer + (i - 1) * block_size);
-        block->next = free_list;
-        free_list = block;
-    }
-}
-
-MemoryManager::PoolAllocator::PoolAllocator(size_t block_size, size_t block_count) :  
-    block_size(std::max(block_size, sizeof(FreeBlock*))), 
-      block_count(block_count), allocated_count(0), owns_memory(true)
-{
-    buffer = new uint8_t[this->block_size * block_count];
-    initialize_free_list();
-}
-
-MemoryManager::PoolAllocator::~PoolAllocator()
-{
-    if (buffer && owns_memory && !MemoryManager::s_shutdown_flag.load()) {
-        try {
-            delete[] buffer;
-        } catch (...) {
-            LOG_ERROR("Failed to delete pool buffer during destruction");
-        }
-        buffer = nullptr;
-    }
-}
-
-void *MemoryManager::PoolAllocator::allocate()
-{
-    if (!free_list) {
-        return nullptr;
-    }
-
-    void* ptr = free_list;
-    free_list = free_list->next;
-    allocated_count++;
-
-    return ptr;
-}
-
-void MemoryManager::PoolAllocator::deallocate(void *ptr)
-{
-    if (!ptr) return;
-    FreeBlock* block = static_cast<FreeBlock*>(ptr);
-    block->next = free_list;
-    free_list = block;
-    allocated_count--;
-}
-
-void MemoryManager::PoolAllocator::reset(){
-    allocated_count = 0;
-    initialize_free_list();
-}
-
-size_t MemoryManager::PoolAllocator::get_block_size() const
-{
-    return block_size;
-}
-
-size_t MemoryManager::PoolAllocator::get_block_count() const
-{
-    return block_count;
-}
-
-size_t MemoryManager::PoolAllocator::get_allocated_count() const
-{
-    return allocated_count;
-}
-
-size_t MemoryManager::PoolAllocator::get_free_count() const
-{
-    return block_count - allocated_count;
-}
-
-size_t MemoryManager::PoolAllocator::get_capacity() const {
-    return block_count * block_size;
-}
-
-size_t MemoryManager::PoolAllocator::get_used_memory() const {
-    return allocated_count * block_size;
-}
-
-MemoryManager::LinearAllocator::LinearAllocator(size_t total_size) : 
-    size(total_size), offset(0), owns_memory(true)
-{
-    buffer = new uint8_t[total_size];
-}
-
-MemoryManager::LinearAllocator::~LinearAllocator()
-{
-    if (buffer && owns_memory && !MemoryManager::s_shutdown_flag.load()) {
-        try {
-            delete[] buffer;
-        } catch (...) {
-            LOG_ERROR("Failed to delete linear buffer during destruction");
-        }
-        buffer = nullptr;
-    }
-}
-
-void *MemoryManager::LinearAllocator::allocate(size_t bytes, size_t alignment)
-{
-    size_t aligned_offset = (offset + alignment - 1) & ~(alignment - 1);
-    
-    if (aligned_offset + bytes > size) {
-        return nullptr; // Out of memory
-    }
-    
-    void* ptr = buffer + aligned_offset;
-    offset = aligned_offset + bytes;
-    allocations.push_back(ptr);
-    return ptr;
-}
-
-void MemoryManager::LinearAllocator::cleanup_all()
-{
-    allocations.clear();
-    offset = 0;
-}
-
-size_t MemoryManager::LinearAllocator::get_used_memory() const
-{
-    return offset;
-}
-
-size_t MemoryManager::LinearAllocator::get_free_memory() const 
-{
-    return size - offset;
-}
-
-size_t MemoryManager::LinearAllocator::get_allocation_count() const
-{
-    return allocations.size();
-}

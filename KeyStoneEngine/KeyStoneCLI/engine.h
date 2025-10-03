@@ -1,6 +1,9 @@
 #pragma once 
 
 #include <string>
+
+/*
+
 #include "enginectx.h"
 
 #define DEBUG
@@ -31,3 +34,5 @@ private:
     bool                                p_running = false;
     EngineContext                       p_ctx;
 };
+
+*/

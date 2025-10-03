@@ -8,7 +8,11 @@
 #include <map>
 #include <unordered_map>
 
-#include "logger.h"
+//#include "logger.h"
+
+#include "arena_allocator.hpp"
+#include "pool_allocator.hpp"
+#include "linear_allocator.hpp"
 
 class MemoryManager {
 public:
@@ -16,13 +20,15 @@ public:
         USER_MANAGED,
         PERMANENT,
         FRAME,
-        SMART_MANAGED
+        SCOPED
     };
     
     enum Tag {
-        SYSTEM_DATA,
+        INTERNAL_DATA,
         RESOURCE,
         SCRIPT,
+        PLUGIN_DATA,
+        GARBAGE,
         TAG_COUNT
     };
 
@@ -40,6 +46,7 @@ public:
     void * realloc(void* ptr, size_t new_size_in_bytes);
     void dealloc(void* ptr);
 
+/*
     template<typename T, typename... Args>
     T* alloc_t(Lifetime lt, Tag tag, const char* debug_name, Args&&... args){
         void * raw_ptr = alloc(sizeof(T), lt, tag, debug_name, 1);
@@ -58,6 +65,7 @@ public:
         }
         return typed_ptr;
     }
+*/
 
     void reset_frame();
     void cleanup_permanent();
@@ -69,11 +77,12 @@ public:
         size_t permanent_allocated = 0;
         size_t resource_pools_used = 0;
         size_t resource_pools_capacity = 0;
-        
+
         struct TagStats {
             size_t count = 0;
             size_t total_size = 0;
         };
+        
         TagStats tag_stats[TAG_COUNT];
     };
 
@@ -97,109 +106,6 @@ private:
         void* allocator_ptr;
     };
 
-    class ArenaAllocator{
-        uint8_t* data;
-        size_t size; 
-        size_t offset;
-        bool owns_memory;
-    public:
-
-        ArenaAllocator() : data(nullptr), size(0), offset(0), owns_memory(false) {};
-        ArenaAllocator(size_t arena_size);
-        ArenaAllocator(void* memory, size_t arena_size);
-
-        ~ArenaAllocator();
-
-        ArenaAllocator(ArenaAllocator&& other) noexcept :
-            data(other.data), size(other.size), offset(other.offset), owns_memory(other.owns_memory)
-        {
-            other.data = nullptr;
-            other.owns_memory = false;
-        }
-
-        // Move assignment
-        ArenaAllocator& operator=(ArenaAllocator&& other) noexcept {
-            if (this != &other) {
-                // Clean up current resources
-                if (data && owns_memory) {
-                    delete[] data;
-                }
-                
-                // Move from other
-                data = other.data;
-                size = other.size;
-                offset = other.offset;
-                owns_memory = other.owns_memory;
-                
-                // Reset other
-                other.data = nullptr;
-                other.owns_memory = false;
-            }
-            return *this;
-        }
-
-        // Delete copy constructor and assignment
-        ArenaAllocator(const ArenaAllocator&) = delete;
-        ArenaAllocator& operator=(const ArenaAllocator&) = delete;
-
-
-        void* allocate(size_t bytes, size_t alignment = sizeof(void*));
-        void reset();
-
-        size_t get_used_memory() const;
-        size_t get_free_memory() const;
-        size_t get_capacity() const ;
-    };
-
-    class PoolAllocator{
-        struct FreeBlock{
-            FreeBlock * next;
-        };
-
-        uint8_t * buffer;
-        FreeBlock* free_list;
-        size_t block_size;
-        size_t block_count;
-        size_t allocated_count;
-        bool owns_memory;
-    public:
-        PoolAllocator() : buffer(nullptr), free_list(nullptr), block_size(0), block_count(0), allocated_count(0) ,owns_memory(false){};
-        PoolAllocator(size_t block_size, size_t block_count);
-        ~PoolAllocator();
-
-        void * allocate();
-        void deallocate(void* ptr);
-        void reset();
-
-        size_t get_block_size() const;
-        size_t get_block_count() const;
-        size_t get_allocated_count() const; 
-        size_t get_free_count() const;
-        size_t get_used_memory() const;
-        size_t get_capacity() const ;
-    private:
-        void initialize_free_list();
-    };
-
-    class LinearAllocator {
-        uint8_t * buffer;
-        size_t size;
-        size_t offset;
-        std::vector<void*> allocations;
-        bool owns_memory;
-    public:
-        LinearAllocator() : buffer(nullptr), size(0), offset(0), owns_memory(false) {};
-        LinearAllocator(size_t total_size);
-        ~LinearAllocator();
-
-        void* allocate(size_t bytes, size_t alignment = sizeof(void*));
-        void cleanup_all(); 
-
-        size_t get_used_memory() const;
-        size_t get_free_memory() const;
-        size_t get_allocation_count() const;
-    };
-
     ArenaAllocator frame_arena;
     std::vector<std::unique_ptr<PoolAllocator>> resource_pools;
     LinearAllocator permanent_allocator;
@@ -219,6 +125,8 @@ private:
     void track_allocation(void* ptr, size_t size, Lifetime lt, Tag tag, const char* debug_name, void* allocator_ptr);
     void untrack_allocation(void* ptr);
 };
+
+/*
 
 namespace ke {
 
@@ -423,3 +331,4 @@ namespace ke {
     using unordered_map = std::unordered_map<K, V, Compare, MemoryManagerAllocator<std::pair<const K, V>>>;
 };
 
+*/

@@ -1,11 +1,31 @@
-//#include "engine.h"
-
-#include <cxxopts.hpp>
 #include <iostream>
+#include <keystone.hpp>
 
 int main(int argc, char** argv){
 
-    std::cout << "Hello world\n";
+    ks_memory_init();
+
+    int* ptr = ks::mem::alloc_t<int, 5>(ks::mem::Lifetime::USER_MANAGED, ks::mem::Tag::GARBAGE);
+
+    ptr[0] = 5;
+
+    ks::log::info("ptr = {}", ptr[0]);
+
+    ks::mem::dealloc(ptr);
+
+    ks::log::info("ptr = {}", ptr[0]);
+
+    ks::script::ScriptManager sm;
+    sm.init();
+
+    sm.script(
+        R"(print("Hello World from script"))"
+    );
+
+    sm.shutdown();
+
+    ks_memory_shutdown();
+
     return 0;
 
     /*

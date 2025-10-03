@@ -7,8 +7,9 @@ local function setupVcpkg()
                   or "x64-osx"
     
     return {
-        includedirs = { path.join(vcpkg_root, "installed", triplet, "include") },
-        libdirs = { path.join(vcpkg_root, "installed", triplet, "lib") }
+        includedir = path.join(vcpkg_root, "installed", triplet, "include"),
+        libdir = path.join(vcpkg_root, "installed", triplet, "lib"),
+        bindir = path.join(vcpkg_root, "installed", triplet, "bin")
     }
 end
 
@@ -21,19 +22,6 @@ workspace "Keystone-Engine"
 
     include "./KeyStoneCore/premake5.lua"
     include "./KeyStoneCLI/premake5.lua"
-
-newaction {
-    trigger = "init",
-    description = "Create build directory structure",
-    execute = function()
-        print("Creating build directory structure...")
-        os.mkdir("build/bin/Debug")
-        os.mkdir("build/bin/Release")
-        os.mkdir("build/obj/Debug")
-        os.mkdir("build/obj/Release")
-        print("Directory structure created!")
-    end
-}
 
 newaction {
     trigger = "clean",

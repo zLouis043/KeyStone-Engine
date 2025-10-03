@@ -6,23 +6,23 @@ project "KeyStone-CLI"
    objdir ("../build/obj/%{cfg.buildcfg}")
 
    files { 
-      "./main.cpp",
-      "./project_manager.*",
-      "./dependency_manager.*",
-      "./deployment_manager.*" 
+      "main.cpp"
    }
    
    includedirs {
-      vcpkg.includedirs,
-      "../KeyStoneCore/include"
+      vcpkg.includedir,
+      "../KeyStoneCore/",
+      "../KeyStoneCore/include/"
    }
 
    libdirs {
-      vcpkg.libdirs,
+      vcpkg.libdir,
+      vcpkg.bindir,
       "../build/bin/%{cfg.buildcfg}" 
    }
 
    links {
+      "lua",
       "KeyStoneCore"
    }
    
@@ -36,3 +36,11 @@ project "KeyStone-CLI"
 
       defines { "NDEBUG" }
       optimize "On"
+
+   filter "system:windows"
+      system "windows"
+      defines { 
+         "WINDOWS",
+         "_WINDOWS"
+      }
+      buildoptions { "/utf-8" }

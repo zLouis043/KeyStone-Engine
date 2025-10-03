@@ -7,7 +7,11 @@ project "KeyStoneCore"
     objdir ("../build/obj/%{cfg.buildcfg}")
 
     files { 
+        "**.h",
+        "**.hpp",
+        "**.cpp",
         "./include/**.h",
+        "./include/**.hpp",
         "./include/**.inl",
         "./src/**.cpp" 
     }
@@ -15,16 +19,29 @@ project "KeyStoneCore"
     includedirs { 
         "./src",
         "./include",
-        vcpkg.includedirs
+        vcpkg.includedir
     }
 
     libdirs {
-        vcpkg.libdirs
+        vcpkg.libdir,
+        vcpkg.bindir
     }
 
     links {
-        "lua"
+        "lua", "fmt", "spdlog"
     }
+
+    defines {
+        "KS_EXPORT"
+    }
+
+    postbuildcommands {
+        "{COPYFILE} %{vcpkg.bindir}/spdlog.dll %{cfg.targetdir}",
+        "{COPYFILE} %{vcpkg.bindir}/fmt.dll %{cfg.targetdir}",
+        "{COPYFILE} %{vcpkg.bindir}/lua.dll %{cfg.targetdir}",
+    }
+
+    characterset ("Unicode")
 
     filter "system:windows"
         system "windows"
@@ -32,6 +49,7 @@ project "KeyStoneCore"
             "WINDOWS",
             "_WINDOWS"
         }
+        buildoptions { "/utf-8" }
 
     filter "configurations:Debug"
       defines { "DEBUG" }
