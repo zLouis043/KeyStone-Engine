@@ -3,7 +3,7 @@
 
 struct MyAsset {
     int a = 5;
-    std::string mammt = "mammt";
+    std::string string = "string";
 
     bool f = true;
 };
@@ -37,7 +37,7 @@ public:
     }
 
     int a = 5;
-    std::string mammt = "mammt";
+    std::string string = "string";
 
     bool f = true;
 };
@@ -58,16 +58,20 @@ int main(int argc, char** argv){
 
     ks_memory_init();
 
-    ks::mem::alloc(5 * sizeof(int), ks::mem::Lifetime::USER_MANAGED, ks::mem::Tag::GARBAGE);
+    int* pptr= (int*)ks::mem::alloc(5 * sizeof(int), ks::mem::Lifetime::USER_MANAGED, ks::mem::Tag::GARBAGE);
     int* ptr = ks::mem::alloc_t<int, 5>(ks::mem::Lifetime::USER_MANAGED, ks::mem::Tag::GARBAGE);
 
+    pptr[2] = 60;
     ptr[0] = 5;
-
-    ks::log::info("ptr = {}", ptr[0]);
-
+    
+    ks::log::info("pptr[2] = {}", pptr[2]);
+    ks::log::info("ptr[0] = {}", ptr[0]);
+    
+    ks::mem::dealloc(pptr);
     ks::mem::dealloc(ptr);
 
-    ks::log::info("ptr = {}", ptr[0]);
+    ks::log::info("pptr[2] = {}", pptr[2]);
+    ks::log::info("ptr[0] = {}", ptr[0]);
 
     ks::script::ScriptManager sm;
     sm.init();
@@ -88,7 +92,7 @@ int main(int argc, char** argv){
 
     ks::log::info("klass->a = {}", klass->a);
     ks::log::info("klass->f = {}", klass->f);
-    ks::log::info("klass->mammt = {}", klass->mammt);
+    ks::log::info("klass->string = {}", klass->string);
 
     am.asset_unload(handle);
 
@@ -101,7 +105,7 @@ int main(int argc, char** argv){
 
 
     Ks_AssetHandle chandle = ks_assets_manager_load_asset_from_file(
-        cam, "MyAsset", "mammt", nullptr
+        cam, "MyAsset", "asset", nullptr
     );
 
     Ks_AssetData cdata = ks_assets_manager_get_data(cam, chandle);
@@ -110,9 +114,9 @@ int main(int argc, char** argv){
 
     ks::log::info("asset.a = {}", asset->a);
     ks::log::info("asset.f = {}", asset->f);
-    ks::log::info("asset.mammt = {}", asset->mammt);
+    ks::log::info("asset.string = {}", asset->string);
 
-    ks_assets_manager_asset_unload(cam, "mammt");
+    ks_assets_manager_asset_unload(cam, "asset");
 
     ks_assets_manager_destroy(cam);
 

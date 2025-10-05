@@ -266,26 +266,7 @@ KS_API Ks_AssetData ks_assets_manager_get_data(Ks_AssetsManager am, Ks_AssetHand
 
 void ks_assets_manager_asset_release(Ks_AssetsManager am, Ks_AssetHandle handle)
 {
-//	if (handle == KS_INVALID_ASSET_HANDLE) return;
-
 	AssetManager_Impl* iam = static_cast<AssetManager_Impl*>(am.impl);
-/*
-	std::string type_name = iam->get_asset_type_from_handle(handle);
-
-	std::string asset_name = iam->get_asset_name_from_handle(handle);
-
-	Ks_IAsset iasset = iam->get_asset_interface(type_name);
-
-	if (!iasset.asset_destroy_fn) {
-		KS_LOG_ERROR("Asset Interface for asset: '%s' does not have a destroy fn", asset_name.c_str());
-		return;
-	}
-
-	Ks_AssetData asset_data = iam->get_asset_data_from_handle(handle);
-
-	if (!asset_data) return;
-
-	iasset.asset_destroy_fn(asset_data);*/
 
 	iam->release_asset(handle);
 }
@@ -301,22 +282,6 @@ KS_API void ks_assets_manager_asset_unload(Ks_AssetsManager am, const char* asse
 	}
 
 	iam->release_asset(asset_handle);
-
-	/*
-
-	Ks_IAsset iasset = iam->get_asset_interface(asset_name);
-
-	if (!iasset.asset_destroy_fn) {
-		KS_LOG_ERROR("Asset Interface for asset: '%s' does not have a destroy fn", asset_name);
-		return;
-	}
-
-	Ks_AssetData asset_data = iam->get_asset_data_from_handle(asset_handle);
-
-	if (!asset_data) return;
-
-	iasset.asset_destroy_fn(asset_data);
-	*/
 }
 
 bool ks_assets_is_handle_valid(Ks_AssetsManager am, Ks_AssetHandle handle)
