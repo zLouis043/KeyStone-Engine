@@ -7,6 +7,7 @@
 #include <memory>
 #include <sol/sol.hpp>
 #include <format>
+#include <typeindex>
 
 static void *lua_custom_Alloc(void *ud, void *ptr, size_t osize, size_t nsize);
 
@@ -160,12 +161,16 @@ namespace mem {
 
     template<typename T, size_t count = 0>
     T* alloc_t(Ks_Lifetime lifetime, Ks_Tag tag, const std::string& debug_name = ""){
-        return static_cast<T*>(alloc(sizeof(T) * count, lifetime, tag, debug_name));
+        T* type = static_cast<T*>(alloc(sizeof(T) * count, lifetime, tag, debug_name));
+        new(type) T();
+        return type;
     }
 
     template<typename T, size_t count = 0>
     T* alloc_t(ks::mem::Lifetime lifetime, ks::mem::Tag tag, const std::string& debug_name = "") {
-        return static_cast<T*>(alloc(sizeof(T) * count, lifetime, tag, debug_name));
+        T* type = static_cast<T*>(alloc(sizeof(T) * count, lifetime, tag, debug_name));
+        new(type) T();
+        return type;
     }
 
     template <typename T>
@@ -228,6 +233,103 @@ namespace script {
         lua_State* raw_state;
     };
 }
+
+namespace asset {
+
+    template <typename T>
+    concept AssetType = requires {
+        { T::load_from_file(std::declval<const char*>()) } -> std::convertible_to<void*>;
+        { T::load_from_data(std::declval<const uint8_t*>()) } -> std::convertible_to<void*>;
+        { T::destroy_asset(std::declval<void*>()) } -> std::same_as<void>;
+    };
+
+    using handle = uint32_t;
+
+    class AssetsManager {
+    public:
+        AssetsManager() {
+            am = ks_assets_manager_create();
+        }
+
+        ~AssetsManager() {
+            ks_assets_manager_destroy(am);
+        }
+
+        template <AssetType T>
+        void register_type(const std::string& type_name) {
+
+            auto found = types.find(std::type_index(typeid(T)));
+            if (found != types.end()) return;
+
+            Ks_IAsset iasset = {
+                .load_from_file_fn = &T::load_from_file,
+                .load_from_data_fn = &T::load_from_data,
+                .asset_destroy_fn = &T::destroy_asset
+            };
+
+            types.emplace(std::type_index(typeid(T)), type_name);
+
+            ks_assets_manager_register_asset_type(
+                am, type_name.c_str(), iasset
+            );
+        }
+
+        template <AssetType T>
+        handle load_asset_from_file(const std::string& asset_name, const std::string& file_path) {
+            auto found = types.find(std::type_index(typeid(T)));
+            if (found == types.end()) {
+                throw std::runtime_error("Trying to load an asset without registering first its type");
+            }
+
+            std::string type_name = found->second;
+
+            Ks_AssetHandle asset_handle = ks_assets_manager_load_asset_from_file(
+                am, type_name.c_str(), asset_name.c_str(), file_path.c_str()
+            );
+
+            return asset_handle;
+        }
+
+        template <AssetType T>
+        handle load_asset_from_data(const std::string& asset_name, const uint8_t* data) {
+            auto found = types.find(std::type_index(typeid(T)));
+            if (found == types.end()) {
+                throw std::runtime_error("Trying to load an asset without registering first its type");
+            }
+
+            std::string type_name = found->second;
+
+            Ks_AssetHandle asset_handle = ks_assets_manager_load_asset_from_data(
+                am, type_name.c_str(), asset_name.c_str(), data
+            );
+
+            return asset_handle;
+        }
+
+        template <AssetType T>
+        T* get_asset_data(handle handle) {
+            T* data = static_cast<T*>(ks_assets_manager_get_data(am, handle));
+            return data;
+        }
+
+        void asset_unload(const std::string& asset_name) {
+            ks_assets_manager_asset_unload(
+                am, asset_name.c_str()
+            );
+        }
+
+        void asset_unload(handle handle) {
+            ks_assets_manager_asset_release(
+                am, handle
+            );
+        }
+
+    private:
+        std::unordered_map<std::type_index, std::string> types;
+        Ks_AssetsManager am;
+    };
+
+};
 
 };
 

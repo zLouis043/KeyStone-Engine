@@ -27,9 +27,9 @@ KS_API Ks_Log_Level ks_log_get_level();
 #endif
 
 #define KS_LOG_TRACE(...) ks_logf(KS_LOG_LVL_TRACE, __VA_ARGS__)
-#define KS_LOG_DEBUG(...) ks_logf(KS_LOG_LVL_INFO, __VA_ARGS__)
+#define KS_LOG_DEBUG(...) ks_logf(KS_LOG_LVL_DEBUG, __VA_ARGS__)
 #define KS_LOG_INFO(...) ks_logf(KS_LOG_LVL_INFO, __VA_ARGS__)
-#define KS_LOG_WARN(...) ks_logf(KS_LOG_LVL_INFO, __VA_ARGS__)
-#define KS_LOG_ERROR(...) ks_logf(KS_LOG_LVL_INFO, __VA_ARGS__)
+#define KS_LOG_WARN(...) ks_logf(KS_LOG_LVL_WARN, __VA_ARGS__)
+#define KS_LOG_ERROR(...) ks_logf(KS_LOG_LVL_ERROR, __VA_ARGS__)
 #define KS_LOG_CRITICAL(...) ks_logf(KS_LOG_LVL_CRITICAL, __VA_ARGS__)
 
