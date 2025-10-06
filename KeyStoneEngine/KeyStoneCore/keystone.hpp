@@ -235,15 +235,57 @@ namespace script {
 }
 
 namespace asset {
-
-    template <typename T>
-    concept AssetType = requires {
-        { T::load_from_file(std::declval<const char*>()) } -> std::convertible_to<void*>;
-        { T::load_from_data(std::declval<const uint8_t*>()) } -> std::convertible_to<void*>;
-        { T::destroy_asset(std::declval<void*>()) } -> std::same_as<void>;
-    };
-
     using handle = uint32_t;
+
+    constexpr uint32_t invalid_handle = KS_INVALID_ASSET_HANDLE;
+    constexpr Ks_AssetData invalid_data = KS_INVALID_ASSET_DATA;
+
+    template <typename Derived>
+    class Asset {
+    public:
+        static Ks_AssetData load_from_file_wrapper(const char* file_path) {
+            Derived* asset = static_cast<Derived*>(Derived::create_impl());
+            if (!asset) return nullptr;
+
+            if (!asset->load_impl(file_path)) {
+                Derived::destroy_impl(asset);
+                return invalid_data;
+            }
+
+            return static_cast<Ks_AssetData>(asset);
+        }
+
+        static Ks_AssetData load_from_file_wrapper(const uint8_t *data) {
+            Derived* asset = static_cast<Derived*>(Derived::create_impl());
+            if (!asset) return nullptr;
+
+            if (!asset->load_impl(data)) {
+                Derived::destroy_impl(asset);
+                return invalid_data;
+            }
+
+            return static_cast<Ks_AssetData>(asset);
+        }
+        
+        static void destroy_wrapper(Ks_AssetData data) {
+            Derived* asset = static_cast<Derived*>(data);
+            Derived::destroy_impl(asset);
+        }
+    protected:
+        static void* create_impl() {
+            return ks::mem::alloc_t<Derived>(
+                ks::mem::Lifetime::USER_MANAGED,
+                ks::mem::Tag::RESOURCE,
+                typeid(Derived).name()
+            );
+        }
+
+        static void destroy_impl(void* asset) {
+            Derived* derived_asset = static_cast<Derived*>(asset);
+            derived_asset->~Derived();
+            ks::mem::dealloc(derived_asset);
+        }
+    };
 
     class AssetsManager {
     public:
@@ -255,16 +297,19 @@ namespace asset {
             ks_assets_manager_destroy(am);
         }
 
-        template <AssetType T>
-        void register_type(const std::string& type_name) {
+        template <typename T>
+        void register_asset_type(const std::string& type_name) {
+
+            static_assert(std::is_base_of_v<Asset<T>, T>,
+                "Asset type must inherit from AssetBase");
 
             auto found = types.find(std::type_index(typeid(T)));
             if (found != types.end()) return;
 
             Ks_IAsset iasset = {
-                .load_from_file_fn = &T::load_from_file,
-                .load_from_data_fn = &T::load_from_data,
-                .asset_destroy_fn = &T::destroy_asset
+                .load_from_file_fn = &T::load_from_file_wrapper,
+                .load_from_data_fn = &T::load_from_file_wrapper,
+                .asset_destroy_fn = &T::destroy_wrapper
             };
 
             types.emplace(std::type_index(typeid(T)), type_name);
@@ -274,8 +319,8 @@ namespace asset {
             );
         }
 
-        template <AssetType T>
-        handle load_asset_from_file(const std::string& asset_name, const std::string& file_path) {
+        template <typename T>
+        handle load_asset(const std::string& asset_name, const std::string& file_path) {
             auto found = types.find(std::type_index(typeid(T)));
             if (found == types.end()) {
                 throw std::runtime_error("Trying to load an asset without registering first its type");
@@ -290,8 +335,8 @@ namespace asset {
             return asset_handle;
         }
 
-        template <AssetType T>
-        handle load_asset_from_data(const std::string& asset_name, const uint8_t* data) {
+        template <typename T>
+        handle load_asset(const std::string& asset_name, const uint8_t* data) {
             auto found = types.find(std::type_index(typeid(T)));
             if (found == types.end()) {
                 throw std::runtime_error("Trying to load an asset without registering first its type");
@@ -306,19 +351,28 @@ namespace asset {
             return asset_handle;
         }
 
-        template <AssetType T>
+        handle get_asset(const std::string& asset_name) {
+            return ks_assets_manager_get_asset(am, asset_name.c_str());
+        }
+
+        uint32_t get_asset_ref_count(handle handle) {
+            return ks_assets_manager_get_ref_count(am, handle);
+        }
+
+        template <typename T>
         T* get_asset_data(handle handle) {
             T* data = static_cast<T*>(ks_assets_manager_get_data(am, handle));
             return data;
         }
 
-        void asset_unload(const std::string& asset_name) {
-            ks_assets_manager_asset_unload(
-                am, asset_name.c_str()
+        void asset_release(const std::string& asset_name) {
+            handle handle = get_asset(asset_name);
+            ks_assets_manager_asset_release(
+                am, handle
             );
         }
 
-        void asset_unload(handle handle) {
+        void asset_release(handle handle) {
             ks_assets_manager_asset_release(
                 am, handle
             );

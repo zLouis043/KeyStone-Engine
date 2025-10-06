@@ -31,7 +31,17 @@ KS_API Ks_AssetHandle ks_assets_manager_load_asset_from_data(
 	const uint8_t* data
 );
 
+KS_API Ks_AssetHandle ks_assets_manager_get_asset(
+	Ks_AssetsManager am,
+	const char* asset_name
+);
+
 KS_API Ks_AssetData ks_assets_manager_get_data(
+	Ks_AssetsManager am,
+	Ks_AssetHandle handle
+);
+
+KS_API uint32_t ks_assets_manager_get_ref_count(
 	Ks_AssetsManager am,
 	Ks_AssetHandle handle
 );
@@ -39,11 +49,6 @@ KS_API Ks_AssetData ks_assets_manager_get_data(
 KS_API void ks_assets_manager_asset_release(
 	Ks_AssetsManager am,
 	Ks_AssetHandle handle
-);
-
-KS_API void ks_assets_manager_asset_unload(
-	Ks_AssetsManager am, 
-	const char* asset_name
 );
 
 KS_API bool ks_assets_is_handle_valid(

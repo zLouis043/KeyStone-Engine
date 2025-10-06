@@ -8,32 +8,16 @@ struct MyAsset {
     bool f = true;
 };
 
-struct MyClass {
+struct MyClass : public ks::asset::Asset<MyClass> {
 public:
-
-    static Ks_AssetData load_from_file(const char* file_path) {
-
-        MyClass* klass = ks::mem::alloc_t<MyClass>(
-            ks::mem::Lifetime::USER_MANAGED, ks::mem::Tag::RESOURCE
-        );
-
-        return static_cast<Ks_AssetData>(klass);
+    bool load_impl(const char* file_path) {
+        string = "loaded from file";
+        return true;
     }
 
-    static Ks_AssetData load_from_data(const uint8_t* data) {
-        MyClass* klass = ks::mem::alloc_t<MyClass>(
-            ks::mem::Lifetime::USER_MANAGED, ks::mem::Tag::RESOURCE
-        );
-
-        return static_cast<Ks_AssetData>(klass);
-    }
-
-    static void   destroy_asset(Ks_AssetData data) {
-        MyClass* klass = static_cast<MyClass*>(data);
-
-        klass->~MyClass();
-
-        ks::mem::dealloc(klass);
+    bool load_impl(const uint8_t* data) {
+        string = "loaded from data";
+        return true;
     }
 
     int a = 5;
@@ -49,7 +33,7 @@ Ks_AssetData create_my_asset(const char* file_path) {
 }
 
 void destroy_my_asset(Ks_AssetData data) {
-    MyAsset* asset = reinterpret_cast<MyAsset*>(data);
+    MyAsset* asset = static_cast<MyAsset*>(data);
     asset->~MyAsset();
     ks::mem::dealloc(asset);
 }
@@ -84,17 +68,41 @@ int main(int argc, char** argv){
 
     ks::asset::AssetsManager am;
 
-    am.register_type<MyClass>("MyClass");
+    am.register_asset_type<MyClass>("MyClass");
 
-    ks::asset::handle handle = am.load_asset_from_file<MyClass>("klass", "");
+    ks::asset::handle handle = am.load_asset<MyClass>("klass", "");
+
+    if (handle == ks::asset::invalid_handle) {
+        ks::log::error("Invalid handle error for asset 'klass'");
+        return 1;
+    }
+
+    uint32_t ref_count = am.get_asset_ref_count(handle);
+
+    ks::log::info("ref_count = {}", ref_count);
 
     MyClass* klass = am.get_asset_data<MyClass>(handle);
 
+    if (klass == ks::asset::invalid_data) {
+        ks::log::error("Invalid data error for asset 'klass'");
+        return 1;
+    }
+    
     ks::log::info("klass->a = {}", klass->a);
     ks::log::info("klass->f = {}", klass->f);
     ks::log::info("klass->string = {}", klass->string);
 
-    am.asset_unload(handle);
+    ks::asset::handle h2 = am.get_asset("klass");
+
+    ks::log::info("handle = {}, h2 = {}", handle, h2);
+
+    ref_count = am.get_asset_ref_count(h2);
+
+    ks::log::info("ref_count = {}", ref_count);
+
+    am.asset_release(h2);
+
+    am.asset_release(handle);
 
     Ks_AssetsManager cam = ks_assets_manager_create();
 
@@ -102,7 +110,6 @@ int main(int argc, char** argv){
         .load_from_file_fn = create_my_asset,
         .asset_destroy_fn = destroy_my_asset
     });
-
 
     Ks_AssetHandle chandle = ks_assets_manager_load_asset_from_file(
         cam, "MyAsset", "asset", nullptr
@@ -116,11 +123,9 @@ int main(int argc, char** argv){
     ks::log::info("asset.f = {}", asset->f);
     ks::log::info("asset.string = {}", asset->string);
 
-    ks_assets_manager_asset_unload(cam, "asset");
+    ks_assets_manager_asset_release(cam, chandle);
 
     ks_assets_manager_destroy(cam);
-
-
 
     ks_memory_shutdown();
 
