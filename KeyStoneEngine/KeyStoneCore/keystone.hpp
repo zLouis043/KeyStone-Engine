@@ -309,7 +309,7 @@ namespace asset {
             Ks_IAsset iasset = {
                 .load_from_file_fn = &T::load_from_file_wrapper,
                 .load_from_data_fn = &T::load_from_file_wrapper,
-                .asset_destroy_fn = &T::destroy_wrapper
+                .destroy_fn = &T::destroy_wrapper
             };
 
             types.emplace(std::type_index(typeid(T)), type_name);

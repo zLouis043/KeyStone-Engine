@@ -106,9 +106,9 @@ int main(int argc, char** argv){
 
     Ks_AssetsManager cam = ks_assets_manager_create();
 
-    ks_assets_manager_register_asset_type(cam, "MyAsset", {
+    ks_assets_manager_register_asset_type(cam, "MyAsset", (Ks_IAsset){
         .load_from_file_fn = create_my_asset,
-        .asset_destroy_fn = destroy_my_asset
+        .destroy_fn = destroy_my_asset
     });
 
     Ks_AssetHandle chandle = ks_assets_manager_load_asset_from_file(

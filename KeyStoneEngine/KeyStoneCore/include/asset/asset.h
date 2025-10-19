@@ -17,5 +17,5 @@ typedef void   (*asset_destroy_fn)(Ks_AssetData asset);
 struct Ks_IAsset {
 	asset_load_from_file_fn load_from_file_fn;
 	asset_load_from_data_fn load_from_data_fn;
-	asset_destroy_fn asset_destroy_fn;
+	asset_destroy_fn destroy_fn;
 };

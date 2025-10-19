@@ -5,7 +5,7 @@
 #include <tuple>
 
 #include <assert.h>
-#include <format>
+#include <atomic>
 
 #include "memory/memory.h"
 #include "core/log.h"
@@ -58,8 +58,8 @@ AssetManager_Impl::~AssetManager_Impl() {
 	for (auto& [handle, entry] : assets_entries) {
 		if (entry.data) {
 			auto interface = get_asset_interface(entry.type_name);
-			if (interface.asset_destroy_fn) {
-				interface.asset_destroy_fn(entry.data);
+			if (interface.destroy_fn) {
+				interface.destroy_fn(entry.data);
 			}
 		}
 	}
@@ -124,8 +124,8 @@ void AssetManager_Impl::release_asset(Ks_AssetHandle handle)
 
 		if (entry.data) {
 			auto interface = get_asset_interface(entry.type_name);
-			if (interface.asset_destroy_fn) {
-				interface.asset_destroy_fn(entry.data);
+			if (interface.destroy_fn) {
+				interface.destroy_fn(entry.data);
 			}
 		}
 
