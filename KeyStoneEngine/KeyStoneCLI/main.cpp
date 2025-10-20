@@ -39,7 +39,7 @@ void destroy_my_asset(Ks_AssetData data) {
 }
 
 int main(int argc, char** argv){
-
+    ks::log::info("Testing keystone-cli");
     ks_memory_init();
 
     int* pptr= (int*)ks::mem::alloc(5 * sizeof(int), ks::mem::Lifetime::USER_MANAGED, ks::mem::Tag::GARBAGE);
@@ -118,7 +118,6 @@ int main(int argc, char** argv){
     Ks_AssetData cdata = ks_assets_manager_get_data(cam, chandle);
 
     MyAsset* asset = reinterpret_cast<MyAsset*>(cdata);
-
     ks::log::info("asset.a = {}", asset->a);
     ks::log::info("asset.f = {}", asset->f);
     ks::log::info("asset.string = {}", asset->string);
