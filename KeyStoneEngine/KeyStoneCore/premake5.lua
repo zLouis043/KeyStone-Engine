@@ -42,12 +42,6 @@ defines({
 	"KS_EXPORT",
 })
 
-postbuildcommands({
-	"{COPYFILE} %{vcpkg.bindir}/spdlog.dll %{cfg.targetdir}",
-	"{COPYFILE} %{vcpkg.bindir}/fmt.dll %{cfg.targetdir}",
-	"{COPYFILE} %{vcpkg.bindir}/lua.dll %{cfg.targetdir}",
-})
-
 characterset("Unicode")
 
 filter("system:windows")

@@ -14,18 +14,7 @@ local function setupVcpkg()
 		}
 	end
 
-	local vcpkg_root = os.getenv("VCPKG_ROOT")
-	if not vcpkg_root then
-		return false
-	end
-
-	local triplet = os.target() == "windows" and "x64-windows" or os.target() == "linux" and "x64-linux" or "x64-osx"
-
-	return {
-		includedir = path.join(vcpkg_root, "installed", triplet, "include"),
-		libdir = path.join(vcpkg_root, "installed", triplet, "lib"),
-		bindir = path.join(vcpkg_root, "installed", triplet, "bin"),
-	}
+	print("ERROR: vcpkg not found! Remember to run ./Scripts/setup.[bat - sh] before compiling everything.")
 end
 
 vcpkg = setupVcpkg()
@@ -46,26 +35,23 @@ newaction({
 	execute = function()
 		print("Removing build dir...")
 		os.rmdir("build")
+		local make = "Makefile"
 		local sln_ext = "*.sln"
 		local vcxproj_ext = "*.vcxproj"
 		local vcxproj_user = "*.vcxproj.user"
 		local vcxproj_filters = "*.vcxproj.filters"
 
 		if os.istarget("windows") then
-			print("Removing Visual Studio files...")
+			print("Removing build files...")
 			os.execute("forfiles /S /M " .. sln_ext .. ' /C "cmd /c del @path"')
 			os.execute("forfiles /S /M " .. vcxproj_ext .. ' /C "cmd /c del @path"')
 			os.execute("forfiles /S /M " .. vcxproj_filters .. ' /C "cmd /c del @path"')
 			os.execute("forfiles /S /M " .. vcxproj_user .. ' /C "cmd /c del @path"')
 		else
 			-- Per Linux/macOS, il comando "find" è l'ideale.
-			print("Removing Visual Studio files...")
-			os.execute("find . -name " .. sln_ext .. " -type f -delete")
-			os.execute("find . -name " .. vcxproj_ext .. " -type f -delete")
-			os.execute("find . -name " .. vcxproj_filters .. " -type f -delete")
-			os.execute("find . -name " .. vcxproj_user .. " -type f -delete")
+			print("Removing build files...")
+			os.execute("find . -name " .. make .. " -type f -delete")
 		end
 		print("Clean Completed!")
 	end,
 })
-

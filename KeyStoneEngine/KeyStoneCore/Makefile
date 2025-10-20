@@ -39,6 +39,8 @@ define PREBUILDCMDS
 endef
 define PRELINKCMDS
 endef
+define POSTBUILDCMDS
+endef
 
 ifeq ($(config),debug_x64)
 TARGETDIR = ../build/bin/Debug
@@ -48,12 +50,6 @@ DEFINES += -DKS_EXPORT -DDEBUG
 ALL_CFLAGS += $(CFLAGS) $(ALL_CPPFLAGS) -m64 -fPIC -g
 ALL_CXXFLAGS += $(CXXFLAGS) $(ALL_CPPFLAGS) -m64 -fPIC -g -std=c++20
 ALL_LDFLAGS += $(LDFLAGS) -L../../vendor/vcpkg/installed/x64-linux/lib -L../../vendor/vcpkg/installed/x64-linux/bin -L/usr/lib64 -m64 -shared -Wl,-soname=libKeyStoneCore.so
-define POSTBUILDCMDS
-	@echo Running postbuild commands
-	cp -f ../../vendor/vcpkg/installed/x64-linux/bin/spdlog.dll ../build/bin/Debug
-	cp -f ../../vendor/vcpkg/installed/x64-linux/bin/fmt.dll ../build/bin/Debug
-	cp -f ../../vendor/vcpkg/installed/x64-linux/bin/lua.dll ../build/bin/Debug
-endef
 
 else ifeq ($(config),release_x64)
 TARGETDIR = ../build/bin/Release
@@ -63,12 +59,6 @@ DEFINES += -DKS_EXPORT -DNDEBUG
 ALL_CFLAGS += $(CFLAGS) $(ALL_CPPFLAGS) -m64 -O2 -fPIC
 ALL_CXXFLAGS += $(CXXFLAGS) $(ALL_CPPFLAGS) -m64 -O2 -fPIC -std=c++20
 ALL_LDFLAGS += $(LDFLAGS) -L../../vendor/vcpkg/installed/x64-linux/lib -L../../vendor/vcpkg/installed/x64-linux/bin -L/usr/lib64 -m64 -shared -Wl,-soname=libKeyStoneCore.so -s
-define POSTBUILDCMDS
-	@echo Running postbuild commands
-	cp -f ../../vendor/vcpkg/installed/x64-linux/bin/spdlog.dll ../build/bin/Release
-	cp -f ../../vendor/vcpkg/installed/x64-linux/bin/fmt.dll ../build/bin/Release
-	cp -f ../../vendor/vcpkg/installed/x64-linux/bin/lua.dll ../build/bin/Release
-endef
 
 endif
 
