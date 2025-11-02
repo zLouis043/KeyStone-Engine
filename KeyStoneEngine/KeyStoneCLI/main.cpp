@@ -39,7 +39,6 @@ void destroy_my_asset(Ks_AssetData data) {
 }
 
 int main(int argc, char** argv){
-    ks::log::info("Testing keystone-cli");
     ks_memory_init();
 
     int* pptr= (int*)ks::mem::alloc(5 * sizeof(int), ks::mem::Lifetime::USER_MANAGED, ks::mem::Tag::GARBAGE);
@@ -68,7 +67,6 @@ int main(int argc, char** argv){
 
     ks::asset::AssetsManager am;
 
-    am.register_asset_type<MyClass>("MyClass");
 
     ks::asset::handle handle = am.load_asset<MyClass>("klass", "");
 

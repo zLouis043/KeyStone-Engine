@@ -1,7 +1,8 @@
-#pragma 
+#pragma
 
-#include "./core/defines.h"
-#include "./core/log.h"
-#include "./memory/memory.h"
-#include "./asset/asset.h"
-#include "./asset/assets_manager.h"
+#include "./include/asset/asset.h"
+#include "./include/asset/assets_manager.h"
+#include "./include/core/defines.h"
+#include "./include/core/log.h"
+#include "./include/memory/memory.h"
+#include "./include/script/lua.h"
