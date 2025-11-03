@@ -3,11 +3,11 @@
 
 #include "core/log.h"
 
-void ks_memory_init(){
+ks_no_ret ks_memory_init(){
     MemoryManager::get_instance(); 
 }
 
-void ks_memory_shutdown(){
+ks_no_ret ks_memory_shutdown(){
     MemoryManager::shutdown();
 }
 
@@ -18,6 +18,7 @@ static MemoryManager::Lifetime ks_to_lt(Ks_Lifetime lt){
         case KS_LT_PERMANENT:    return MemoryManager::Lifetime::PERMANENT;
         case KS_LT_SCOPED:       return MemoryManager::Lifetime::SCOPED;
     }
+    return MemoryManager::Lifetime::USER_MANAGED;
 }
 
 static MemoryManager::Tag ks_to_tag(Ks_Tag tag){
@@ -31,13 +32,14 @@ static MemoryManager::Tag ks_to_tag(Ks_Tag tag){
         default:
             KS_LOG_ERROR("An invalid value was given as Ks_Tag := (%d)", (int)tag);
     }
+    return MemoryManager::Tag::TAG_COUNT;
 }
 
-void* ks_alloc(size_t size_in_bytes, Ks_Lifetime lifetime, Ks_Tag tag){
+ks_ptr ks_alloc(ks_size size_in_bytes, Ks_Lifetime lifetime, Ks_Tag tag){
     return ks_alloc_debug(size_in_bytes, lifetime, tag, "--");
 }
 
-void* ks_alloc_debug(size_t size_in_bytes, Ks_Lifetime lifetime, Ks_Tag tag, const char* debug_name){
+ks_ptr ks_alloc_debug(ks_size size_in_bytes, Ks_Lifetime lifetime, Ks_Tag tag, ks_str debug_name){
 
     MemoryManager::Lifetime lt = ks_to_lt(lifetime);
 
@@ -56,18 +58,18 @@ void* ks_alloc_debug(size_t size_in_bytes, Ks_Lifetime lifetime, Ks_Tag tag, con
     );
 }
 
-void  ks_dealloc(void* ptr){
+ks_no_ret  ks_dealloc(ks_ptr ptr){
     MemoryManager::get_instance().dealloc(ptr);
 }
 
-void* ks_realloc(void* ptr, size_t new_size_in_bytes){
+ks_ptr ks_realloc(ks_ptr ptr, ks_size new_size_in_bytes){
     return MemoryManager::get_instance().realloc(ptr, new_size_in_bytes);
 }
 
-void ks_set_frame_capacity(size_t frame_mem_capacity_in_bytes){
+ks_no_ret ks_set_frame_capacity(ks_size frame_mem_capacity_in_bytes){
     MemoryManager::get_instance().set_frame_capacity(frame_mem_capacity_in_bytes);
 }
 
-void  ks_frame_cleanup(){
+ks_no_ret  ks_frame_cleanup(){
     MemoryManager::get_instance().reset_frame();
 }

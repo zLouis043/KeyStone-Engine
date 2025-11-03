@@ -13,6 +13,7 @@ typedef void ks_void;
 typedef void ks_no_ret;
 typedef void *ks_ptr;
 typedef uint8_t ks_bool;
+typedef uint8_t ks_byte;
 typedef short ks_short;
 typedef int ks_int;
 typedef long ks_long;

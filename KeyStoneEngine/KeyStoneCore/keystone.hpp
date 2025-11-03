@@ -5,9 +5,9 @@
 #include <string>
 
 #include <memory>
-#include <sol/sol.hpp>
 #include <format>
 #include <typeindex>
+#include <unordered_map>
 
 static void *lua_custom_Alloc(void *ud, void *ptr, size_t osize, size_t nsize);
 
@@ -182,7 +182,7 @@ namespace mem {
         ks_set_frame_capacity(frame_mem_capacity_in_bytes);
     }
 };
-
+/*
 namespace script {
 
     class TypeManager {
@@ -232,7 +232,7 @@ namespace script {
         TypeManager tm;
         lua_State* raw_state;
     };
-}
+}*/
 
 namespace asset {
     using handle = uint32_t;

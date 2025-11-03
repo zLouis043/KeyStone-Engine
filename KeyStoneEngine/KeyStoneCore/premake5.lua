@@ -2,6 +2,7 @@ project("KeyStoneCore")
 kind("SharedLib")
 language("C++")
 cppdialect("C++20")
+staticruntime "On"
 
 targetdir("../build/bin/%{cfg.buildcfg}")
 objdir("../build/obj/%{cfg.buildcfg}")
@@ -19,27 +20,22 @@ files({
 includedirs({
 	"./src",
 	"./include",
-	vcpkg.includedir,
+	vcpkg.static.includedir,
 })
 
 libdirs({
-	vcpkg.libdir,
-	vcpkg.bindir,
+	vcpkg.static.libdir,
+	vcpkg.static.bindir,
 })
 
-filter("system:linux")
-links({ "lua5.4" })
-filter("system:windows")
-links({ "lua" })
-filter({})
-
 links({
-	"fmt",
-	"spdlog",
+	"lua"
 })
 
 defines({
 	"KS_EXPORT",
+	"FMT_HEADER_ONLY",     -- fmt diventa header-only, niente linking
+	"SPDLOG_HEADER_ONLY",  -- spdlog diventa header-only, niente linking
 })
 
 characterset("Unicode")

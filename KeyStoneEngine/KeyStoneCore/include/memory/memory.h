@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../core/defines.h"
+#include "../core/types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -25,16 +26,16 @@ enum Ks_Tag {
     KS_TAG_COUNT
 };
 
-KS_API void ks_memory_init();
-KS_API void ks_memory_shutdown();
+KS_API ks_no_ret ks_memory_init();
+KS_API ks_no_ret ks_memory_shutdown();
 
-KS_API void* ks_alloc(size_t size_in_bytes, Ks_Lifetime lifetime, Ks_Tag tag);
-KS_API void* ks_alloc_debug(size_t size_in_bytes, Ks_Lifetime lifetime, Ks_Tag tag, const char* debug_name);
-KS_API void* ks_realloc(void* ptr, size_t new_size_in_bytes);
-KS_API void  ks_dealloc(void* ptr);
+KS_API ks_ptr ks_alloc(ks_size size_in_bytes, Ks_Lifetime lifetime, Ks_Tag tag);
+KS_API ks_ptr ks_alloc_debug(ks_size size_in_bytes, Ks_Lifetime lifetime, Ks_Tag tag, ks_str debug_name);
+KS_API ks_ptr ks_realloc(ks_ptr ptr, ks_size new_size_in_bytes);
+KS_API ks_no_ret  ks_dealloc(ks_ptr ptr);
 
-KS_API void ks_set_frame_capacity(size_t frame_mem_capacity_in_bytes);
-KS_API void ks_frame_cleanup();
+KS_API ks_no_ret ks_set_frame_capacity(ks_size frame_mem_capacity_in_bytes);
+KS_API ks_no_ret ks_frame_cleanup();
 
 #ifdef __cplusplus
 } // extern "C"

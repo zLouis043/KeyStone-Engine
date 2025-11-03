@@ -1,5 +1,5 @@
 cd ../vendor/vcpkg/ 
 call ./bootstrap-vcpkg.bat
-./vcpkg install lua
-./vcpkg install sol2
-./vcpkg install spdlog
+vcpkg.exe install lua
+vcpkg.exe install sol2
+vcpkg.exe install spdlog

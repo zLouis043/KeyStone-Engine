@@ -5,4 +5,4 @@
 #include "./include/core/defines.h"
 #include "./include/core/log.h"
 #include "./include/memory/memory.h"
-#include "./include/script/lua.h"
+#include "./include/script/script_engine.h"

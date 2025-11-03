@@ -56,17 +56,86 @@ int main(int argc, char** argv){
     ks::log::info("pptr[2] = {}", pptr[2]);
     ks::log::info("ptr[0] = {}", ptr[0]);
 
-    ks::script::ScriptManager sm;
-    sm.init();
+    Ks_Script_Ctx ctx = ks_script_create_ctx();
 
-    sm.script(
-        R"(print("Hello World from script"))"
+    ks::log::info("script_ctx = {}", static_cast<void*>(ctx));
+
+    Ks_Script_Object func = ks_script_create_cfunc(ctx, [](Ks_Script_Ctx ctx) -> int {
+
+        Ks_Script_Object o1 = ks_script_stack_pop_obj(ctx);
+        Ks_Script_Object o2 = ks_script_stack_pop_obj(ctx);
+
+        ks_double res = ks_script_obj_as_number(o1) + ks_script_obj_as_number(o2);
+
+        ks::log::trace("Hello From CFunc in lua");
+        ks::log::trace("Should be 10 + 20:= {}", res);
+
+        Ks_Script_Object o3 = ks_script_create_number(ctx, res);
+        ks_script_stack_push_obj(ctx, o3);
+
+        return 1;
+    });
+
+    Ks_Script_Function_Call_Result res = ks_script_func_callv(ctx, func,
+        ks_script_create_number(ctx, 10),
+        ks_script_create_number(ctx, 20)
     );
 
-    sm.shutdown();
+    ks::log::info("res as number: {}", ks_script_obj_as_number(res));
+
+    res = ks_script_do_string(ctx, "print(\"Hello from lua\")");
+    
+    Ks_Script_Table tbl = ks_script_create_named_table(ctx, "test");
+    ks_script_table_set(ctx, tbl,
+        ks_script_create_cstring(ctx, "a"),
+        ks_script_create_number(ctx, 10)
+    );
+
+    ks_script_table_set(ctx, tbl,
+        ks_script_create_cstring(ctx, "b"),
+        ks_script_create_number(ctx, 20)
+    );
+
+    ks_script_table_set(ctx, tbl,
+        ks_script_create_cstring(ctx, "c"),
+        ks_script_create_number(ctx, 30)
+    );
+
+    ks_bool has = ks_script_table_has(
+        ctx, tbl,
+        ks_script_create_cstring(ctx, "a")
+    );
+
+    ks::log::info("test has a:= {}", has);
+
+    if (has) {
+        Ks_Script_Object obj = ks_script_table_get(
+            ctx, tbl,
+            ks_script_create_cstring(ctx, "a")
+        );
+
+        ks::log::info("test.a = {}", ks_script_obj_as_number(obj));
+    }
+
+    Ks_Script_Table_Iterator it = ks_script_table_iterate(ctx, tbl);
+
+    Ks_Script_Object key, value;
+    while (ks_script_iterator_next(ctx, &it, &key, &value)) {
+        ks::log::debug("Key: {} -> Value: {}",
+            ks_script_obj_as_str(key),
+            ks_script_obj_as_number(value)
+        );
+    }
+
+    ks_script_iterator_destroy(ctx, &it);
+
+    ks::log::info("Lua mem used {} kb", ks_script_get_mem_used(ctx));
+
+    ks_script_destroy_ctx(ctx);
 
     ks::asset::AssetsManager am;
 
+    am.register_asset_type<MyClass>("MyClass");
 
     ks::asset::handle handle = am.load_asset<MyClass>("klass", "");
 
@@ -104,10 +173,11 @@ int main(int argc, char** argv){
 
     Ks_AssetsManager cam = ks_assets_manager_create();
 
-    ks_assets_manager_register_asset_type(cam, "MyAsset", (Ks_IAsset){
-        .load_from_file_fn = create_my_asset,
-        .destroy_fn = destroy_my_asset
-    });
+    Ks_IAsset my_asset;
+    my_asset.load_from_file_fn = create_my_asset;
+    my_asset.destroy_fn = destroy_my_asset;
+
+    ks_assets_manager_register_asset_type(cam, "MyAsset", my_asset);
 
     Ks_AssetHandle chandle = ks_assets_manager_load_asset_from_file(
         cam, "MyAsset", "asset", nullptr

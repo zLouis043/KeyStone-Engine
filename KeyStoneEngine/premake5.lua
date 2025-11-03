@@ -11,6 +11,11 @@ local function setupVcpkg()
 			includedir = path.join(local_vcpkg, "installed", triplet, "include"),
 			libdir = path.join(local_vcpkg, "installed", triplet, "lib"),
 			bindir = path.join(local_vcpkg, "installed", triplet, "bin"),
+			static = {
+				includedir = path.join(local_vcpkg, "installed", triplet .. "-static", "include"),
+				libdir = path.join(local_vcpkg, "installed", triplet .. "-static", "lib"),
+				bindir = path.join(local_vcpkg, "installed", triplet .. "-static", "bin"),
+			}
 		}
 	end
 
@@ -19,7 +24,7 @@ end
 
 vcpkg = setupVcpkg()
 
-print(vcpkg)
+print("vcpkg.static.libdir: " .. vcpkg.static.libdir)
 
 workspace("Keystone-Engine")
 configurations({ "Debug", "Release" })

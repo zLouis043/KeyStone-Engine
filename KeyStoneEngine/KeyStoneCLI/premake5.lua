@@ -10,19 +10,18 @@ project "KeyStone-CLI"
    }
    
    includedirs {
-      vcpkg.includedir,
+      vcpkg.static.includedir,
       "../KeyStoneCore/",
       "../KeyStoneCore/include/"
    }
 
    libdirs {
-      vcpkg.libdir,
-      vcpkg.bindir,
+      vcpkg.static.libdir,
+      vcpkg.static.bindir,
       "../build/bin/%{cfg.buildcfg}" 
    }
 
    links {
-      "lua",
       "KeyStoneCore"
    }
    

@@ -25,3 +25,6 @@
 #else
     #define KS_API
 #endif
+
+#define ks_false 0
+#define ks_true 1
