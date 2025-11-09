@@ -26,7 +26,6 @@ public:
     bool f = true;
 };
 
-
 Ks_AssetData create_my_asset(const char* file_path) {
     MyAsset* asset = ks::mem::alloc_t<MyAsset>(ks::mem::Lifetime::USER_MANAGED, ks::mem::Tag::RESOURCE);
     return static_cast<Ks_AssetData>(asset);
@@ -36,6 +35,148 @@ void destroy_my_asset(Ks_AssetData data) {
     MyAsset* asset = static_cast<MyAsset*>(data);
     asset->~MyAsset();
     ks::mem::dealloc(asset);
+}
+
+struct Entity {
+    int id;
+    Entity(int _id) : id(_id) { std::cout << "[C++] Entity constructed\n"; }
+    virtual ~Entity() { std::cout << "[C++] Entity destroyed\n"; }
+    void exist() { std::cout << "[C++] Entity " << id << " exists.\n"; }
+};
+
+class Hero : public Entity {
+public:
+    std::string name;
+    int hp;
+    Hero(const std::string& n, int h) : name(n), hp(h), Entity(2) { 
+        std::cout << "[C++] Hero '" << name << "' constructed\n"; 
+    }
+    ~Hero() { 
+        std::cout << "[C++] Hero '" << name << "' destroyed\n"; 
+    }
+    void heal(int amount) { 
+        hp += amount; 
+        std::cout << "[C++] " << name << " healed by " << amount << ". HP: " << hp << "\n"; 
+    }
+    void attack() {
+        std::cout << "[C++] " << name << " performs a basic attack!\n";
+    }
+    void attack(int damage) {
+        std::cout << "[C++] " << name << " performs a STRONG attack dealing " << damage << " damage!\n";
+    }
+};
+
+ks_returns_count entity_exist(Ks_Script_Ctx ctx) {
+    Ks_Script_Object self = ks_script_stack_peek(ctx, 1);
+    Entity* e = (Entity*)ks_script_userdata_get_ptr(ctx, self);
+    if (e) e->exist();
+    ks_script_free_obj(ctx, self);
+    return 0;
+}
+
+ks_returns_count entity_get_id(Ks_Script_Ctx ctx) {
+    Ks_Script_Object self = ks_script_stack_peek(ctx, 1);
+    Entity* e = (Entity*)ks_script_userdata_get_ptr(ctx, self);
+    if (e) ks_script_stack_push_obj(ctx, ks_script_create_number(ctx, e->id));
+    else ks_script_stack_push_obj(ctx, ks_script_create_nil(ctx));
+    ks_script_free_obj(ctx, self);
+    return 1;
+}
+
+void register_entity(Ks_Script_Ctx ctx) {
+    auto b = ks_script_usertype_begin(ctx, "Entity");
+    ks_script_usertype_add_method(b, "exist", entity_exist);
+    ks_script_usertype_add_property(b, "id", entity_get_id, nullptr);
+    ks_script_usertype_end(b);
+}
+
+ks_returns_count hero_new(Ks_Script_Ctx ctx) {
+    Ks_Script_Object name_arg = ks_script_stack_peek(ctx, 1);
+    Ks_Script_Object hp_arg = ks_script_stack_peek(ctx, 2);
+
+    Ks_Script_Userdata ud = ks_script_create_userdata(ctx, sizeof(Hero));
+    
+    const char* name_str = ks_script_obj_as_str(ctx, name_arg);
+    int hp_val = (int)ks_script_obj_as_number(ctx, hp_arg);
+    new(ks_script_userdata_get_ptr(ctx, ud)) Hero(name_str ? name_str : "Unknown", hp_val);
+
+    ks_script_set_type_name(ctx, ud, "Hero");
+    ks_script_stack_push_obj(ctx, ud);
+
+    ks_script_free_obj(ctx, ud);
+    
+    if (name_arg.type == KS_SCRIPT_OBJECT_TYPE_STRING) ks_script_free_obj(ctx, name_arg);
+
+    return 1;
+}
+
+void hero_delete(ks_ptr data, ks_size size) {
+    static_cast<Hero*>(data)->~Hero();
+}
+
+ks_returns_count hero_heal(Ks_Script_Ctx ctx) {
+    Ks_Script_Object self = ks_script_stack_peek(ctx, 1);
+    Ks_Script_Object amt = ks_script_stack_peek(ctx, 2);
+    Hero* h = (Hero*)ks_script_userdata_get_ptr(ctx, self);
+    if (h) h->heal((int)ks_script_obj_as_number(ctx, amt));
+    
+    ks_script_free_obj(ctx, self);
+    return 0;
+}
+
+ks_returns_count hero_get_hp(Ks_Script_Ctx ctx) {
+    Ks_Script_Object self = ks_script_stack_peek(ctx, 1);
+    Hero* h = (Hero*)ks_script_userdata_get_ptr(ctx, self);
+    if (h) {
+        ks_script_stack_push_obj(ctx, ks_script_create_number(ctx, h->hp));
+    } else {
+        ks_script_stack_push_obj(ctx, ks_script_create_nil(ctx));
+    }
+    ks_script_free_obj(ctx, self);
+    return 1;
+}
+
+ks_returns_count hero_set_hp(Ks_Script_Ctx ctx) {
+    Ks_Script_Object self = ks_script_stack_peek(ctx, 1);
+    Ks_Script_Object val = ks_script_stack_peek(ctx, 2);
+    Hero* h = (Hero*)ks_script_userdata_get_ptr(ctx, self);
+    if (h) h->hp = (int)ks_script_obj_as_number(ctx, val);
+    
+    ks_script_free_obj(ctx, self);
+    return 0;
+}
+
+ks_returns_count hero_attack_default(Ks_Script_Ctx ctx) {
+    Ks_Script_Object self = ks_script_stack_peek(ctx, 1);
+    Hero* h = (Hero*)ks_script_userdata_get_ptr(ctx, self);
+    if (h) h->attack();
+    ks_script_free_obj(ctx, self);
+    return 0;
+}
+
+ks_returns_count hero_attack_strong(Ks_Script_Ctx ctx) {
+    Ks_Script_Object self = ks_script_stack_peek(ctx, 1);
+    Ks_Script_Object dmg = ks_script_stack_peek(ctx, 2); 
+    Hero* h = (Hero*)ks_script_userdata_get_ptr(ctx, self);
+    if (h) h->attack((int)ks_script_obj_as_number(ctx, dmg));
+    ks_script_free_obj(ctx, self);
+    return 0;
+}
+
+void register_hero_type(Ks_Script_Ctx ctx) {
+    auto b = ks_script_usertype_begin(ctx, "Hero");
+    ks_script_usertype_inherits_from(b, "Entity");
+    ks_script_usertype_set_constructor(b, hero_new);
+    ks_script_usertype_set_destructor(b, hero_delete);
+    ks_script_usertype_add_method(b, "heal", hero_heal);
+    ks_script_usertype_add_property(b, "hp", hero_get_hp, hero_set_hp);
+
+    Ks_Script_Object_Type attack_strong_args[] = { KS_SCRIPT_OBJECT_TYPE_NUMBER };
+
+    ks_script_usertype_add_overload(b, "attack", hero_attack_default, NULL, 0);
+    ks_script_usertype_add_overload(b, "attack", hero_attack_strong, attack_strong_args, 1);
+
+    ks_script_usertype_end(b);
 }
 
 int main(int argc, char** argv){
@@ -60,12 +201,12 @@ int main(int argc, char** argv){
 
     ks::log::info("script_ctx = {}", static_cast<void*>(ctx));
 
-    Ks_Script_Object func = ks_script_create_cfunc(ctx, [](Ks_Script_Ctx ctx) -> int {
+    Ks_Script_Object func = ks_script_create_cfunc(ctx, [](Ks_Script_Ctx ctx) -> ks_returns_count {
 
         Ks_Script_Object o1 = ks_script_stack_pop_obj(ctx);
         Ks_Script_Object o2 = ks_script_stack_pop_obj(ctx);
 
-        ks_double res = ks_script_obj_as_number(o1) + ks_script_obj_as_number(o2);
+        ks_double res = ks_script_obj_as_number(ctx, o1) + ks_script_obj_as_number(ctx, o2);
 
         ks::log::trace("Hello From CFunc in lua");
         ks::log::trace("Should be 10 + 20:= {}", res);
@@ -81,53 +222,98 @@ int main(int argc, char** argv){
         ks_script_create_number(ctx, 20)
     );
 
-    ks::log::info("res as number: {}", ks_script_obj_as_number(res));
+    ks::log::info("res as number: {}", ks_script_obj_as_number(ctx, res));
 
     res = ks_script_do_string(ctx, "print(\"Hello from lua\")");
     
     Ks_Script_Table tbl = ks_script_create_named_table(ctx, "test");
-    ks_script_table_set(ctx, tbl,
-        ks_script_create_cstring(ctx, "a"),
-        ks_script_create_number(ctx, 10)
-    );
 
-    ks_script_table_set(ctx, tbl,
-        ks_script_create_cstring(ctx, "b"),
-        ks_script_create_number(ctx, 20)
-    );
+    ks_script_begin_scope(ctx);
 
-    ks_script_table_set(ctx, tbl,
-        ks_script_create_cstring(ctx, "c"),
-        ks_script_create_number(ctx, 30)
-    );
+    ks_script_table_set(ctx, tbl, 
+        ks_script_create_cstring(ctx, "a"), ks_script_create_number(ctx, 10));
 
-    ks_bool has = ks_script_table_has(
-        ctx, tbl,
-        ks_script_create_cstring(ctx, "a")
-    );
+    ks_script_table_set(ctx, tbl, 
+        ks_script_create_cstring(ctx, "b"), ks_script_create_number(ctx, 20));
+
+    ks_script_table_set(ctx, tbl, 
+        ks_script_create_cstring(ctx, "c"), ks_script_create_number(ctx, 30));
+
+    ks_str k = "a";
+    ks_bool has = ks_script_table_has(ctx, tbl, ks_script_create_cstring(ctx, k));
 
     ks::log::info("test has a:= {}", has);
 
     if (has) {
-        Ks_Script_Object obj = ks_script_table_get(
-            ctx, tbl,
-            ks_script_create_cstring(ctx, "a")
-        );
+        Ks_Script_Object obj = ks_script_table_get(ctx, tbl, ks_script_create_cstring(ctx, k));
 
-        ks::log::info("test.a = {}", ks_script_obj_as_number(obj));
+        ks::log::info("test.{} = {}", k, ks_script_obj_as_number(ctx, obj));
     }
+
+    ks_script_end_scope(ctx);
 
     Ks_Script_Table_Iterator it = ks_script_table_iterate(ctx, tbl);
 
-    Ks_Script_Object key, value;
-    while (ks_script_iterator_next(ctx, &it, &key, &value)) {
+    ks_script_begin_scope(ctx);
+
+    Ks_Script_Object key, val;
+    while (ks_script_iterator_next(ctx, &it, &key, &val)) {
         ks::log::debug("Key: {} -> Value: {}",
-            ks_script_obj_as_str(key),
-            ks_script_obj_as_number(value)
+            ks_script_obj_as_str(ctx, key),
+            ks_script_obj_as_number(ctx, val)
         );
     }
 
+    ks_script_end_scope(ctx);
+
     ks_script_iterator_destroy(ctx, &it);
+
+    register_entity(ctx);
+    register_hero_type(ctx);
+
+    ks_str test_script = R"(
+        print("--- Lua Start ---")
+        
+        -- 1. Test Costruttore
+        local h1 = Hero("Arthur", 100)
+        print("Hero created via Lua. Type:", type(h1))
+
+        -- 2. Test Property Get
+        print("Initial HP:", h1.hp)
+
+        -- 3. Test Method Call
+        h1:heal(50)
+
+        -- 4. Test Property Set & Get
+        h1.hp = 10
+        print("HP after direct set:", h1.hp)
+        
+        print("1. Testing attack() with NO arguments:")
+        h1:attack() -- Dovrebbe chiamare hero_attack_default
+
+        print("\n2. Testing attack(1000) with ONE NUMBER argument:")
+        h1:attack(9999) -- Dovrebbe chiamare hero_attack_strong
+    
+        h1:exist()
+
+        print(h1.id)
+
+        -- 5. Test Garbage Collection
+        print("Releasing hero to GC...")
+        h1 = nil
+        collectgarbage() -- Forza il GC per vedere il distruttore C++
+        
+        print("--- Lua End ---")
+    )";
+
+    Ks_Script_Function_Call_Result script_res = ks_script_do_string(ctx, test_script);
+
+    if (ks_script_obj_type(ctx, script_res) == KS_SCRIPT_OBJECT_TYPE_NIL) {
+        Ks_Script_Error err = ks_script_get_last_error(ctx);
+        if (err != KS_SCRIPT_ERROR_NONE) {
+            ks::log::error("Lua Error: {}", ks_script_get_last_error_str(ctx));
+        }
+    }
 
     ks::log::info("Lua mem used {} kb", ks_script_get_mem_used(ctx));
 
@@ -195,72 +381,5 @@ int main(int argc, char** argv){
     ks_assets_manager_destroy(cam);
 
     ks_memory_shutdown();
-
-    return 0;
-
-    /*
-    if(argc < 2){
-        LOG_FATAL("Project path was not given to the engine.\n\tUsage: ./keystone-cli <project_path>");
-        return 1;
-    }
-
-    engine e;
-
-    Result<void> res = e.init();
-
-    if(!res.ok()){
-        LOG_FATAL("Could not init the engine:\n\t{}", 
-            res.what());
-        return 1;
-    }
-
-    res = e.set_engine_path(argv[0]);
-
-    if(!res.ok()){
-        LOG_FATAL("Could not set the engine path:\n\t{}", 
-            res.what());
-        return 1;
-    }
-
-    res = e.set_project_path(argv[1]);
-
-    if(!res.ok()){
-        LOG_FATAL("Could not set the project path:\n\t{}", 
-            res.what());
-        return 1;
-    }
-
-    res = e.load_configs();
-
-    if(!res.ok()){
-        LOG_FATAL("Could not load configs:\n\t{}", 
-            res.what());
-        return 1;
-    }
-
-    res = e.load_systems();
-
-    if(!res.ok()){
-        LOG_FATAL("Could not load systems:\n\t{}", 
-            res.what());
-        return 1;
-    }
-
-    res = e.load_project();
-    
-    if(!res.ok()){
-        LOG_FATAL("Could not load project:\n\t{}",
-            res.what());
-        return 1;
-    } 
-
-    res = e.run();
-
-    if(!res.ok()){
-        LOG_FATAL("Could not run the project:\n\t{}", res.what());
-        return 1;
-    }  
-    */
-
     return 0;
 }

@@ -9,8 +9,6 @@
 #include <typeindex>
 #include <unordered_map>
 
-static void *lua_custom_Alloc(void *ud, void *ptr, size_t osize, size_t nsize);
-
 namespace ks {
 
 namespace log {
@@ -182,58 +180,12 @@ namespace mem {
         ks_set_frame_capacity(frame_mem_capacity_in_bytes);
     }
 };
-/*
 namespace script {
+    class Context;
+    class Object;
 
-    class TypeManager {
-        template<typename T, typename... Args>
-        void register_type(const std::string& type_name, Args&&... args){
-
-        }
-    };
-
-    class ScriptManager {
-    public:
-        bool init(){
-            raw_state = lua_newstate(lua_custom_Alloc, nullptr);
-            if(!raw_state) return false;
-            sol::state_view view(raw_state);
-            view.open_libraries(sol::lib::base, sol::lib::io, sol::lib::string, sol::lib::math);
-
-            return true;
-        }
-        void shutdown(){
-            if (raw_state) {
-                lua_close(raw_state);
-                raw_state = nullptr;
-            }
-        }
-
-        sol::protected_function_result script_file(const std::string& file_path){
-            return view().script_file(file_path);
-        }
-
-        sol::protected_function_result script(const std::string& script){
-            return view().script(script);
-        }
-
-        template<typename T, typename... Args>
-        void register_type(const std::string& type_name, Args&&... args){
-            tm.register_type<T>(type_name, std::forward<Args>(args)...);
-        }
-
-        lua_State* get_raw_state() { return raw_state; }
-
-        sol::state_view view(){
-            return sol::state_view(raw_state);
-        }
-
-    private:
-        TypeManager tm;
-        lua_State* raw_state;
-    };
-}*/
-
+    
+};
 namespace asset {
     using handle = uint32_t;
 
@@ -386,16 +338,3 @@ namespace asset {
 };
 
 };
-
-static void *lua_custom_Alloc(void *ud, void *ptr, size_t osize, size_t nsize){
-    if (nsize == 0) {
-        if (ptr) {
-            ks::mem::dealloc(ptr);
-        }
-        return nullptr;
-    }else if(ptr == nullptr){
-        return ks::mem::alloc(nsize, ks::mem::Lifetime::USER_MANAGED, ks::mem::Tag::SCRIPT, "LuaData");
-    }
-
-    return ks::mem::realloc(ptr, nsize);
-}

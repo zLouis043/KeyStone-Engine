@@ -12,20 +12,29 @@ extern "C" {
 #endif
 #include <string>
 #include <vector>
+#include <map>
 #include "../memory/memory.h"
+#include "../core/log.h"
 
 class KsScriptEngineCtx {
 public:
+	using Scope = std::vector<Ks_Script_Ref>;
+
 	KsScriptEngineCtx(lua_State* state) : 
 		p_state(state) ,
 		p_error_info{
 			.error = KS_SCRIPT_ERROR_NONE,
 			.message = NULL
 		}
-	{}
+	{
+		p_scopes.emplace_back();
+	}
 
 	~KsScriptEngineCtx() {
-		cleanup_registry();
+		while (!p_scopes.empty()) {
+			force_close_top_scope();
+		}
+
 		if (p_error_info.message != NULL) {
 			ks_dealloc((void*)p_error_info.message);
 		}
@@ -60,9 +69,19 @@ public:
 		p_state = state;
 	}
 
+	void begin_scope() {
+		p_scopes.emplace_back();
+	}
+
+	void end_scope() {
+		if (p_scopes.size() > 1) {
+			force_close_top_scope();
+		}
+	}
+
 	Ks_Script_Ref store_in_registry() {
 		Ks_Script_Ref ref = luaL_ref(p_state, LUA_REGISTRYINDEX);
-		p_registry_refs.push_back(ref);
+		p_scopes.back().push_back(ref);
 		return ref;
 	}
 
@@ -71,22 +90,74 @@ public:
 	}
 
 	ks_no_ret release_from_registry(Ks_Script_Ref ref) {
-		luaL_unref(p_state, LUA_REGISTRYINDEX, ref);
-	}
-
-	ks_no_ret cleanup_registry() {
-		for (Ks_Script_Ref ref : p_registry_refs) {
-			if (ref != LUA_REFNIL && ref != LUA_NOREF) {
+		for (auto it = p_scopes.rbegin(); it != p_scopes.rend(); ++it) {
+			auto& scope = *it;
+			auto found = std::find(scope.begin(), scope.end(), ref);
+			if (found != scope.end()) {
+				scope.erase(found);
 				luaL_unref(p_state, LUA_REGISTRYINDEX, ref);
+				return;
 			}
 		}
-		p_registry_refs.clear();
+	}
+
+	void promote_to_parent(Ks_Script_Ref ref) {
+
+		if (p_scopes.size() <= 1) {
+			return;
+		}
+
+		auto& current = p_scopes.back();
+		auto it = std::find(current.begin(), current.end(), ref);
+		if (it != current.end()) {
+			current.erase(it);
+			p_scopes[p_scopes.size() - 2].push_back(ref);
+		}
 	}
 
 	const Ks_Script_Error_Info& get_error_info() const { return p_error_info;  }
 
 private:
+	void force_close_top_scope() {
+		if (p_scopes.empty()) return;
+		Scope& current = p_scopes.back();for (Ks_Script_Ref ref : current) {
+			if (ref != LUA_NOREF && ref != LUA_REFNIL) {
+				luaL_unref(p_state, LUA_REGISTRYINDEX, ref);
+			}
+		}
+		p_scopes.pop_back();
+	}
+
+private:
 	lua_State* p_state = nullptr;
 	Ks_Script_Error_Info p_error_info;
-	std::vector<Ks_Script_Ref> p_registry_refs;
+	std::vector<Scope> p_scopes;
+};
+
+struct MethodInfo {
+	std::string name;
+	ks_script_cfunc func;
+	std::vector<Ks_Script_Object_Type> signature;
+};
+
+struct PropertyInfo {
+	std::string name;
+	ks_script_cfunc getter;
+	ks_script_cfunc setter;
+};
+
+struct KsUsertypeBuilder {
+	Ks_Script_Ctx ctx;
+	std::string type_name;
+	std::string base_type_name;
+
+	ks_script_cfunc constructor = nullptr;
+	ks_script_deallocator destructor = nullptr;
+
+	std::map<std::string, std::vector<MethodInfo>> methods;
+	std::map<std::string, std::vector<MethodInfo>> static_methods;
+	std::vector<PropertyInfo> properties;
+	std::map<Ks_Script_Metamethod, ks_script_cfunc> metamethods;
+
+	KsUsertypeBuilder(Ks_Script_Ctx c, const char* name) : ctx(c), type_name(name) {}
 };
