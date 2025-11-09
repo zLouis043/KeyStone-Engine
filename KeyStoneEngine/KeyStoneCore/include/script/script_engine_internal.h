@@ -16,6 +16,11 @@ extern "C" {
 #include "../memory/memory.h"
 #include "../core/log.h"
 
+struct CallFrame {
+	int arg_offset = 0;
+	int upval_offset = 0;
+};
+
 class KsScriptEngineCtx {
 public:
 	using Scope = std::vector<Ks_Script_Ref>;
@@ -115,6 +120,19 @@ public:
 		}
 	}
 
+	void push_call_frame(int arg_off, int upval_off) {
+		p_call_stack.push_back({ arg_off, upval_off });
+	}
+
+	void pop_call_frame() {
+		if (!p_call_stack.empty()) p_call_stack.pop_back();
+	}
+
+	CallFrame current_frame() const {
+		if (p_call_stack.empty()) return { 0, 0 };
+		return p_call_stack.back();
+	}
+
 	const Ks_Script_Error_Info& get_error_info() const { return p_error_info;  }
 
 private:
@@ -132,6 +150,7 @@ private:
 	lua_State* p_state = nullptr;
 	Ks_Script_Error_Info p_error_info;
 	std::vector<Scope> p_scopes;
+	std::vector<CallFrame> p_call_stack;
 };
 
 struct MethodInfo {
@@ -150,8 +169,10 @@ struct KsUsertypeBuilder {
 	Ks_Script_Ctx ctx;
 	std::string type_name;
 	std::string base_type_name;
+	
+	size_t instance_size = 0;
 
-	ks_script_cfunc constructor = nullptr;
+	std::vector<MethodInfo> constructors;
 	ks_script_deallocator destructor = nullptr;
 
 	std::map<std::string, std::vector<MethodInfo>> methods;
@@ -159,5 +180,7 @@ struct KsUsertypeBuilder {
 	std::vector<PropertyInfo> properties;
 	std::map<Ks_Script_Metamethod, ks_script_cfunc> metamethods;
 
-	KsUsertypeBuilder(Ks_Script_Ctx c, const char* name) : ctx(c), type_name(name) {}
+	KsUsertypeBuilder(Ks_Script_Ctx c, const char* name, size_t instance_size) : 
+		ctx(c), type_name(name) , instance_size(instance_size)
+	{}
 };

@@ -96,6 +96,12 @@ typedef struct {
   ks_bool valid;
 } Ks_Script_Table_Iterator;
 
+typedef struct {
+    ks_script_cfunc func;
+    Ks_Script_Object_Type* signature;
+    ks_size signature_len;
+} Ks_Script_Overload_Def;
+
 typedef enum {
   KS_SCRIPT_ERROR_NONE,
   KS_SCRIPT_ERROR_CTX_NOT_CREATED,
@@ -134,9 +140,11 @@ KS_API Ks_Script_Object ks_script_create_nil(Ks_Script_Ctx ctx);
 KS_API Ks_Script_Object ks_script_create_invalid_obj(Ks_Script_Ctx ctx);
 
 KS_API Ks_Script_Function ks_script_create_cfunc(Ks_Script_Ctx ctx, ks_script_cfunc f);
+KS_API Ks_Script_Function ks_script_create_overloaded_cfunc(Ks_Script_Ctx ctx, Ks_Script_Overload_Def* overloads, ks_size count);
 KS_API Ks_Script_Function ks_script_create_cfunc_with_upvalues(Ks_Script_Ctx ctx,
                                                         ks_script_cfunc f,
                                                         ks_size n_upvalues);
+KS_API Ks_Script_Function ks_script_create_overloaded_cfunc_with_upvalues(Ks_Script_Ctx ctx, Ks_Script_Overload_Def* overloads, ks_size count, ks_size n_upvalues);
 
 KS_API Ks_Script_Table ks_script_create_table(Ks_Script_Ctx ctx);
 KS_API Ks_Script_Table ks_script_create_table_with_capacity(Ks_Script_Ctx ctx,
@@ -203,6 +211,7 @@ KS_API ks_no_ret ks_script_stack_copy(Ks_Script_Ctx ctx, ks_stack_idx from, ks_s
 KS_API ks_no_ret ks_script_stack_dump(Ks_Script_Ctx ctx);
 
 KS_API Ks_Script_Object_Type ks_script_obj_type(Ks_Script_Ctx ctx, Ks_Script_Object obj);
+KS_API ks_bool ks_script_obj_is_valid(Ks_Script_Ctx ctx, Ks_Script_Object obj);
 KS_API ks_bool ks_script_obj_is(Ks_Script_Ctx ctx, Ks_Script_Object obj, Ks_Script_Object_Type type);
 KS_API ks_double ks_script_obj_as_number(Ks_Script_Ctx ctx, Ks_Script_Object obj);
 KS_API ks_bool ks_script_obj_as_boolean(Ks_Script_Ctx ctx, Ks_Script_Object obj);
@@ -266,6 +275,9 @@ KS_API ks_no_ret ks_script_iterator_reset(Ks_Script_Ctx ctx,
 KS_API Ks_Script_Table_Iterator
 KS_API ks_script_iterator_clone(Ks_Script_Ctx ctx, Ks_Script_Table_Iterator *iterator);
 
+KS_API Ks_Script_Object ks_script_get_arg(Ks_Script_Ctx ctx, ks_stack_idx n);
+KS_API Ks_Script_Object ks_script_get_upvalue(Ks_Script_Ctx ctx, ks_upvalue_idx n);
+
 KS_API ks_no_ret ks_script_func_call(Ks_Script_Ctx ctx, Ks_Script_Function f,
                               ks_size n_args, ks_size n_rets);
 
@@ -307,17 +319,20 @@ KS_API ks_ptr ks_script_lightuserdata_get_ptr(Ks_Script_Ctx ctx, Ks_Script_Light
 KS_API ks_ptr ks_script_userdata_get_ptr(Ks_Script_Ctx ctx, Ks_Script_Userdata ud);
 
 KS_API ks_no_ret ks_script_set_type_name(Ks_Script_Ctx ctx, Ks_Script_Object obj, ks_str type_name);
+KS_API ks_ptr ks_script_get_self(Ks_Script_Ctx ctx);
 
-KS_API Ks_Script_Userytype_Builder ks_script_usertype_begin(Ks_Script_Ctx ctx, ks_str type_name);
+KS_API Ks_Script_Userytype_Builder ks_script_usertype_begin(Ks_Script_Ctx ctx, ks_str type_name, ks_size instance_size);
 
 KS_API ks_no_ret ks_script_usertype_inherits_from(Ks_Script_Userytype_Builder builder, ks_str base_type_name);
 
-KS_API ks_no_ret ks_script_usertype_set_constructor(Ks_Script_Userytype_Builder builder, ks_script_cfunc ctor);
+KS_API ks_no_ret ks_script_usertype_add_constructor(Ks_Script_Userytype_Builder builder, ks_script_cfunc ctor);
+KS_API ks_no_ret ks_script_usertype_add_constructor_overload(Ks_Script_Userytype_Builder builder, ks_script_cfunc ctor, Ks_Script_Object_Type* args, ks_size num_args);
 KS_API ks_no_ret ks_script_usertype_set_destructor(Ks_Script_Userytype_Builder builder, ks_script_deallocator dtor);
 
 KS_API ks_no_ret ks_script_usertype_add_method(Ks_Script_Userytype_Builder builder, ks_str name, ks_script_cfunc func);
 KS_API ks_no_ret ks_script_usertype_add_overload(Ks_Script_Userytype_Builder builder, ks_str name, ks_script_cfunc func, Ks_Script_Object_Type* args, ks_size num_args);
 KS_API ks_no_ret ks_script_usertype_add_static_method(Ks_Script_Userytype_Builder builder, ks_str name, ks_script_cfunc func);
+KS_API ks_no_ret ks_script_usertype_add_static_overload(Ks_Script_Userytype_Builder builder, ks_str name, ks_script_cfunc func, Ks_Script_Object_Type* args, ks_size num_args);
 
 KS_API ks_no_ret ks_script_usertype_add_property(Ks_Script_Userytype_Builder builder, ks_str name, ks_script_cfunc getter, ks_script_cfunc setter);
 

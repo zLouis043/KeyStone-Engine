@@ -67,47 +67,54 @@ public:
 };
 
 ks_returns_count entity_exist(Ks_Script_Ctx ctx) {
-    Ks_Script_Object self = ks_script_stack_peek(ctx, 1);
-    Entity* e = (Entity*)ks_script_userdata_get_ptr(ctx, self);
-    if (e) e->exist();
-    ks_script_free_obj(ctx, self);
+    Entity* self = (Entity*)ks_script_get_self(ctx);
+    if (self) self->exist();
     return 0;
 }
 
 ks_returns_count entity_get_id(Ks_Script_Ctx ctx) {
-    Ks_Script_Object self = ks_script_stack_peek(ctx, 1);
-    Entity* e = (Entity*)ks_script_userdata_get_ptr(ctx, self);
-    if (e) ks_script_stack_push_obj(ctx, ks_script_create_number(ctx, e->id));
+    Entity* self = (Entity*)ks_script_get_self(ctx);
+    if (self) ks_script_stack_push_obj(ctx, ks_script_create_number(ctx, self->id));
     else ks_script_stack_push_obj(ctx, ks_script_create_nil(ctx));
-    ks_script_free_obj(ctx, self);
     return 1;
 }
 
 void register_entity(Ks_Script_Ctx ctx) {
-    auto b = ks_script_usertype_begin(ctx, "Entity");
+    auto b = ks_script_usertype_begin(ctx, "Entity", sizeof(Entity));
     ks_script_usertype_add_method(b, "exist", entity_exist);
     ks_script_usertype_add_property(b, "id", entity_get_id, nullptr);
     ks_script_usertype_end(b);
 }
 
 ks_returns_count hero_new(Ks_Script_Ctx ctx) {
-    Ks_Script_Object name_arg = ks_script_stack_peek(ctx, 1);
-    Ks_Script_Object hp_arg = ks_script_stack_peek(ctx, 2);
+    Hero* self = (Hero*)ks_script_get_self(ctx);
+    new(self) Hero("Unknown", 420);
+    return 0;
+}
 
-    Ks_Script_Userdata ud = ks_script_create_userdata(ctx, sizeof(Hero));
-    
-    const char* name_str = ks_script_obj_as_str(ctx, name_arg);
-    int hp_val = (int)ks_script_obj_as_number(ctx, hp_arg);
-    new(ks_script_userdata_get_ptr(ctx, ud)) Hero(name_str ? name_str : "Unknown", hp_val);
+ks_returns_count hero_new_1(Ks_Script_Ctx ctx) {
+    Hero* self = (Hero*)ks_script_get_self(ctx);
 
-    ks_script_set_type_name(ctx, ud, "Hero");
-    ks_script_stack_push_obj(ctx, ud);
+    Ks_Script_Object name_arg = ks_script_get_arg(ctx, 1);
+    const char* name = ks_script_obj_as_str(ctx, name_arg);
 
-    ks_script_free_obj(ctx, ud);
-    
-    if (name_arg.type == KS_SCRIPT_OBJECT_TYPE_STRING) ks_script_free_obj(ctx, name_arg);
+    new(self) Hero(name ? name : "Unknown", 69);
 
-    return 1;
+    return 0;
+}
+
+ks_returns_count hero_new_2(Ks_Script_Ctx ctx) {
+    Hero* self = (Hero*)ks_script_get_self(ctx);
+
+    Ks_Script_Object name_arg = ks_script_get_arg(ctx, 1);
+    const char* name = ks_script_obj_as_str(ctx, name_arg);
+
+    Ks_Script_Object hp_arg = ks_script_get_arg(ctx, 2);
+    int hp = ks_script_obj_as_number(ctx, hp_arg);
+
+    new(self) Hero(name ? name : "Unknown", hp);
+
+    return 0;
 }
 
 void hero_delete(ks_ptr data, ks_size size) {
@@ -115,58 +122,51 @@ void hero_delete(ks_ptr data, ks_size size) {
 }
 
 ks_returns_count hero_heal(Ks_Script_Ctx ctx) {
-    Ks_Script_Object self = ks_script_stack_peek(ctx, 1);
-    Ks_Script_Object amt = ks_script_stack_peek(ctx, 2);
-    Hero* h = (Hero*)ks_script_userdata_get_ptr(ctx, self);
-    if (h) h->heal((int)ks_script_obj_as_number(ctx, amt));
-    
-    ks_script_free_obj(ctx, self);
+    Hero* self = (Hero*)ks_script_get_self(ctx);
+    Ks_Script_Object amt = ks_script_get_arg(ctx, 1);
+    if (self) self->heal((int)ks_script_obj_as_number(ctx, amt));
     return 0;
 }
 
 ks_returns_count hero_get_hp(Ks_Script_Ctx ctx) {
-    Ks_Script_Object self = ks_script_stack_peek(ctx, 1);
-    Hero* h = (Hero*)ks_script_userdata_get_ptr(ctx, self);
-    if (h) {
-        ks_script_stack_push_obj(ctx, ks_script_create_number(ctx, h->hp));
+    Hero* self = (Hero*)ks_script_get_self(ctx);
+    if (self) {
+        ks_script_stack_push_obj(ctx, ks_script_create_number(ctx, self->hp));
     } else {
         ks_script_stack_push_obj(ctx, ks_script_create_nil(ctx));
     }
-    ks_script_free_obj(ctx, self);
     return 1;
 }
 
 ks_returns_count hero_set_hp(Ks_Script_Ctx ctx) {
-    Ks_Script_Object self = ks_script_stack_peek(ctx, 1);
-    Ks_Script_Object val = ks_script_stack_peek(ctx, 2);
-    Hero* h = (Hero*)ks_script_userdata_get_ptr(ctx, self);
-    if (h) h->hp = (int)ks_script_obj_as_number(ctx, val);
-    
-    ks_script_free_obj(ctx, self);
+    Hero* self = (Hero*)ks_script_get_self(ctx);
+    Ks_Script_Object val = ks_script_get_arg(ctx, 1);
+    if (self) self->hp = (int)ks_script_obj_as_number(ctx, val);
     return 0;
 }
 
 ks_returns_count hero_attack_default(Ks_Script_Ctx ctx) {
-    Ks_Script_Object self = ks_script_stack_peek(ctx, 1);
-    Hero* h = (Hero*)ks_script_userdata_get_ptr(ctx, self);
-    if (h) h->attack();
-    ks_script_free_obj(ctx, self);
+    Hero* self = (Hero*)ks_script_get_self(ctx);
+    if (self) self->attack();
     return 0;
 }
 
 ks_returns_count hero_attack_strong(Ks_Script_Ctx ctx) {
-    Ks_Script_Object self = ks_script_stack_peek(ctx, 1);
-    Ks_Script_Object dmg = ks_script_stack_peek(ctx, 2); 
-    Hero* h = (Hero*)ks_script_userdata_get_ptr(ctx, self);
-    if (h) h->attack((int)ks_script_obj_as_number(ctx, dmg));
-    ks_script_free_obj(ctx, self);
+    Hero* self = (Hero*)ks_script_get_self(ctx);
+    Ks_Script_Object dmg = ks_script_get_arg(ctx, 1); 
+    if (self) self->attack((int)ks_script_obj_as_number(ctx, dmg));
     return 0;
 }
 
 void register_hero_type(Ks_Script_Ctx ctx) {
-    auto b = ks_script_usertype_begin(ctx, "Hero");
+    auto b = ks_script_usertype_begin(ctx, "Hero", sizeof(Hero));
     ks_script_usertype_inherits_from(b, "Entity");
-    ks_script_usertype_set_constructor(b, hero_new);
+
+    Ks_Script_Object_Type args[2] = {KS_SCRIPT_OBJECT_TYPE_STRING, KS_SCRIPT_OBJECT_TYPE_NUMBER};
+
+    ks_script_usertype_add_constructor(b, hero_new);
+    ks_script_usertype_add_constructor_overload(b, hero_new_1, args, 1);
+    ks_script_usertype_add_constructor_overload(b, hero_new_2, args, 2);
     ks_script_usertype_set_destructor(b, hero_delete);
     ks_script_usertype_add_method(b, "heal", hero_heal);
     ks_script_usertype_add_property(b, "hp", hero_get_hp, hero_set_hp);
@@ -203,8 +203,8 @@ int main(int argc, char** argv){
 
     Ks_Script_Object func = ks_script_create_cfunc(ctx, [](Ks_Script_Ctx ctx) -> ks_returns_count {
 
-        Ks_Script_Object o1 = ks_script_stack_pop_obj(ctx);
-        Ks_Script_Object o2 = ks_script_stack_pop_obj(ctx);
+        Ks_Script_Object o1 = ks_script_get_arg(ctx, 1);
+        Ks_Script_Object o2 = ks_script_get_arg(ctx, 2);
 
         ks_double res = ks_script_obj_as_number(ctx, o1) + ks_script_obj_as_number(ctx, o2);
 
@@ -275,9 +275,14 @@ int main(int argc, char** argv){
         print("--- Lua Start ---")
         
         -- 1. Test Costruttore
+        local h = Hero()
+        local h2 = Hero("Viktor")
         local h1 = Hero("Arthur", 100)
         print("Hero created via Lua. Type:", type(h1))
-
+    
+        print("h.hp = ", h.hp)
+        print("h2.hp = ", h2.hp)    
+    
         -- 2. Test Property Get
         print("Initial HP:", h1.hp)
 
@@ -308,7 +313,7 @@ int main(int argc, char** argv){
 
     Ks_Script_Function_Call_Result script_res = ks_script_do_string(ctx, test_script);
 
-    if (ks_script_obj_type(ctx, script_res) == KS_SCRIPT_OBJECT_TYPE_NIL) {
+    if (!ks_script_call_succeded(ctx, script_res)) {
         Ks_Script_Error err = ks_script_get_last_error(ctx);
         if (err != KS_SCRIPT_ERROR_NONE) {
             ks::log::error("Lua Error: {}", ks_script_get_last_error_str(ctx));

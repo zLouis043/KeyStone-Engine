@@ -181,10 +181,140 @@ namespace mem {
     }
 };
 namespace script {
-    class Context;
-    class Object;
+    /*
+    class Error : public std::runtime_error {
+    public:
+        Error(const std::string& msg) : std::runtime_error(msg) {}
+    };
 
-    
+    class Object;
+    class Table;
+    class Function;
+
+    class Object {
+    protected:
+        Ks_Script_Ctx m_ctx = nullptr;
+        Ks_Script_Object m_obj;
+
+        void invalidate() { m_ctx = nullptr; }
+    public:
+        Object() { m_obj = ks_script_create_invalid_obj(nullptr); }
+
+        Object(Ks_Script_Ctx ctx, Ks_Script_Object obj) : m_ctx(ctx), m_obj(obj) {}
+
+        virtual ~Object() {
+            if (m_ctx) {
+                ks_script_free_obj(m_ctx, m_obj);
+            }
+        }
+
+        Object(Object&& other) noexcept : m_ctx(other.m_ctx), m_obj(other.m_obj) {
+            other.invalidate();
+        }
+
+        Object& operator=(Object&& other) noexcept {
+            if (this != &other) {
+                if (m_ctx) ks_script_free_obj(m_ctx, m_obj);
+
+                m_ctx = other.m_ctx;
+                m_obj = other.m_obj;
+                other.invalidate();
+            }
+            return *this;
+        }
+
+        Object(const Object&) = delete;
+        Object& operator=(const Object&) = delete;
+
+        bool valid() const { return ks_script_obj_is_valid(m_ctx, m_obj); }
+        Ks_Script_Ctx ctx() const { return m_ctx; }
+        Ks_Script_Object raw() const { return m_obj; }
+        Ks_Script_Object_Type type() const { return m_obj.type; }
+
+        template<typename T>
+        bool is() const {
+            if (!m_ctx) return false;
+            if constexpr (std::is_same_v<T, double> || std::is_same_v<T, int> || std::is_same_v<T, float>)
+                return m_obj.type == KS_SCRIPT_OBJECT_TYPE_NUMBER;
+            else if constexpr (std::is_same_v<T, std::string>)
+                return m_obj.type == KS_SCRIPT_OBJECT_TYPE_STRING;
+            else if constexpr (std::is_same_v<T, bool>)
+                return m_obj.type == KS_SCRIPT_OBJECT_TYPE_BOOLEAN;
+            return false;
+        }
+
+        template<typename T>
+        T as() const {
+            if (!m_ctx) throw Error("Object invalid");
+            if constexpr (std::is_arithmetic_v<T> && !std::is_same_v<T, bool>) {
+                return static_cast<T>(ks_script_obj_as_number(m_ctx, m_obj));
+            }
+            else if constexpr (std::is_same_v<T, bool>) {
+                return ks_script_obj_as_boolean(m_ctx, m_obj);
+            }
+            else if constexpr (std::is_same_v<T, std::string>) {
+                const char* s = ks_script_obj_as_str(m_ctx, m_obj);
+                return s ? std::string(s) : std::string();
+            }
+            else {
+                throw Error("Unsupported type cast");
+            }
+        }
+    };
+
+    class Context {
+        Ks_Script_Ctx m_ctx;
+        bool m_owns;
+    public:
+        explicit Context(bool create_new = true) : m_owns(create_new) {
+            if (create_new) m_ctx = ks_script_create_ctx();
+            else m_ctx = nullptr;
+        }
+
+        Context(Ks_Script_Ctx ctx, bool take_ownership = false)
+            : m_ctx(ctx), m_owns(take_ownership) {}
+
+        ~Context() {
+            if (m_owns && m_ctx) {
+                ks_script_destroy_ctx(m_ctx);
+            }
+        }
+
+        Ks_Script_Ctx raw() const { return m_ctx; }
+
+        Object do_string(const std::string& code) {
+            auto res = ks_script_do_string(m_ctx, code.c_str());
+            check_error(res);
+            return Object(m_ctx, res);
+        }
+
+        template<typename T>
+        void set(const std::string& name, T&& value) {
+            // TODO: Implementare un converter generico T -> Ks_Script_Object
+            // Per ora supportiamo solo alcuni tipi base come esempio
+            if constexpr (std::is_arithmetic_v<std::decay_t<T>>) {
+                auto obj = ks_script_create_number(m_ctx, static_cast<double>(value));
+                ks_script_set_global(m_ctx, name.c_str(), obj);
+                // Non serve free_obj qui perché è un numero (copiato per valore)
+            }
+            // ... altri tipi ...
+        }
+
+        Object get(const std::string& name) {
+            return Object(m_ctx, ks_script_get_global(m_ctx, name.c_str()));
+        }
+    private:
+        void check_error(Ks_Script_Object possible_err_obj) {
+            if (possible_err_obj.type == KS_SCRIPT_OBJECT_TYPE_NIL ||
+                possible_err_obj.type == KS_SCRIPT_OBJECT_TYPE_UNKNOWN) { // O altro modo per rilevare fallimento
+                // Verifica se c'è un errore nel contesto
+                if (ks_script_get_last_error(m_ctx) != KS_SCRIPT_ERROR_NONE) {
+                    throw Error(ks_script_get_last_error_str(m_ctx));
+                }
+            }
+        }
+    };
+    */
 };
 namespace asset {
     using handle = uint32_t;
@@ -207,7 +337,7 @@ namespace asset {
             return static_cast<Ks_AssetData>(asset);
         }
 
-        static Ks_AssetData load_from_file_wrapper(const uint8_t *data) {
+        static Ks_AssetData load_from_file_wrapper(const uint8_t* data) {
             Derived* asset = static_cast<Derived*>(Derived::create_impl());
             if (!asset) return nullptr;
 
@@ -218,7 +348,7 @@ namespace asset {
 
             return static_cast<Ks_AssetData>(asset);
         }
-        
+
         static void destroy_wrapper(Ks_AssetData data) {
             Derived* asset = static_cast<Derived*>(data);
             Derived::destroy_impl(asset);
@@ -334,7 +464,5 @@ namespace asset {
         std::unordered_map<std::type_index, std::string> types;
         Ks_AssetsManager am;
     };
-
-};
-
+}
 };
