@@ -124,6 +124,67 @@ TEST_CASE("C API: Script Engine Suite") {
         } ks_script_end_scope(ctx);
     }
 
+    SUBCASE("Stack Manipulation") {
+        ks_script_begin_scope(ctx); {
+            ks_script_stack_clear(ctx);
+            CHECK(ks_script_stack_size(ctx) == 0);
+
+            ks_script_stack_push_number(ctx, 10.0);
+            ks_script_stack_push_number(ctx, 20.0);
+            ks_script_stack_push_number(ctx, 30.0);
+            CHECK(ks_script_stack_size(ctx) == 3);
+
+            CHECK(ks_script_obj_as_number(ctx, ks_script_stack_peek(ctx, -1)) == 30.0);
+            CHECK(ks_script_obj_as_number(ctx, ks_script_stack_peek(ctx, 1)) == 10.0);
+
+            Ks_Script_Object popped = ks_script_stack_pop_obj(ctx);
+            CHECK(ks_script_obj_as_number(ctx, popped) == 30.0);
+            CHECK(ks_script_stack_size(ctx) == 2);
+
+            ks_script_stack_push_number(ctx, 99.0);
+            ks_script_stack_insert(ctx, 1);
+            CHECK(ks_script_obj_as_number(ctx, ks_script_stack_peek(ctx, 1)) == 99.0);
+            CHECK(ks_script_obj_as_number(ctx, ks_script_stack_peek(ctx, 2)) == 10.0);
+
+            ks_script_stack_remove(ctx, 2);
+            CHECK(ks_script_stack_size(ctx) == 2);
+            CHECK(ks_script_obj_as_number(ctx, ks_script_stack_peek(ctx, 2)) == 20.0);
+
+            ks_script_stack_push_number(ctx, 55.0);
+            ks_script_stack_replace(ctx, 1);
+            CHECK(ks_script_obj_as_number(ctx, ks_script_stack_peek(ctx, 1)) == 55.0);
+
+            ks_script_stack_copy(ctx, 1, 2);
+            CHECK(ks_script_obj_as_number(ctx, ks_script_stack_peek(ctx, 2)) == 55.0);
+
+            ks_script_stack_clear(ctx);
+            CHECK(ks_script_stack_size(ctx) == 0);
+
+        } ks_script_end_scope(ctx);
+    }
+
+    SUBCASE("Lifetimes: Scopes, Promote & Free") {
+        Ks_Script_Object promoted_obj;
+
+        ks_script_begin_scope(ctx); {
+            Ks_Script_Table t1 = ks_script_create_table(ctx);
+            ks_script_table_set(ctx, t1, ks_script_create_cstring(ctx, "k"), ks_script_create_number(ctx, 100));
+
+            promoted_obj = t1;
+            ks_script_promote(ctx, promoted_obj);
+
+            Ks_Script_Table t_garbage = ks_script_create_table(ctx);
+        } ks_script_end_scope(ctx);
+
+        CHECK(ks_script_obj_is_valid(ctx, promoted_obj));
+        CHECK(ks_script_obj_type(ctx, promoted_obj) == KS_SCRIPT_OBJECT_TYPE_TABLE);
+
+        Ks_Script_Object val = ks_script_table_get(ctx, static_cast<Ks_Script_Table>(promoted_obj), ks_script_create_cstring(ctx, "k"));
+        CHECK(ks_script_obj_as_number(ctx, val) == 100.0);
+
+        ks_script_free_obj(ctx, promoted_obj);
+    }
+
     SUBCASE("Functions: C calling Lua & Lua calling C") {
         ks_script_begin_scope(ctx); {
             ks_script_cfunc add_func = [](Ks_Script_Ctx c) -> ks_returns_count {
@@ -154,6 +215,40 @@ TEST_CASE("C API: Script Engine Suite") {
 
             CHECK(ks_script_call_succeded(ctx, res_lua));
             CHECK(ks_script_obj_as_number(ctx, ks_script_call_get_return(ctx, res_lua)) == 12.0);
+
+        } ks_script_end_scope(ctx);
+    }
+
+    SUBCASE("Upvalues (C Closures)") {
+        ks_script_begin_scope(ctx); {
+
+            ks_script_cfunc counter_func = [](Ks_Script_Ctx c) -> ks_returns_count {
+                Ks_Script_Object up_tbl = ks_script_func_get_upvalue(c, 1);
+                Ks_Script_Object key = ks_script_create_cstring(c, "val");
+
+                double val = ks_script_obj_as_number(c, ks_script_table_get(c, static_cast<Ks_Script_Table>(up_tbl), key));
+
+                val += 1.0;
+                ks_script_table_set(c, static_cast<Ks_Script_Table>(up_tbl), key, ks_script_create_number(c, val));
+
+                ks_script_stack_push_obj(c, ks_script_create_number(c, val));
+                return 1;
+            };
+
+            Ks_Script_Table state_tbl = ks_script_create_table(ctx);
+            ks_script_table_set(ctx, state_tbl, ks_script_create_cstring(ctx, "val"), ks_script_create_number(ctx, 0));
+
+            ks_script_stack_push_obj(ctx, state_tbl);
+
+            Ks_Script_Function closure = ks_script_create_cfunc_with_upvalues(ctx, counter_func, 1);
+
+            Ks_Script_Function_Call_Result res1 = ks_script_func_callv(ctx, closure);
+            CHECK(ks_script_call_succeded(ctx, res1));
+            CHECK(ks_script_obj_as_number(ctx, ks_script_call_get_return(ctx, res1)) == 1.0);
+
+            Ks_Script_Function_Call_Result res2 = ks_script_func_callv(ctx, closure);
+            CHECK(ks_script_call_succeded(ctx, res2));
+            CHECK(ks_script_obj_as_number(ctx, ks_script_call_get_return(ctx, res2)) == 2.0);
 
         } ks_script_end_scope(ctx);
     }
@@ -195,6 +290,55 @@ TEST_CASE("C API: Script Engine Suite") {
             ks_script_iterator_destroy(ctx, &it);
 
             CHECK(count == 3);
+
+        } ks_script_end_scope(ctx);
+    }
+
+    SUBCASE("Metatables") {
+        ks_script_begin_scope(ctx); {
+
+            Ks_Script_Table obj = ks_script_create_table(ctx);
+            Ks_Script_Table mt = ks_script_create_table(ctx);
+
+            ks_script_obj_set_metatable(ctx, obj, mt);
+
+            CHECK(ks_script_obj_has_metatable(ctx, obj) == ks_true);
+
+            Ks_Script_Table got_mt = ks_script_obj_get_metatable(ctx, obj);
+            CHECK(ks_script_obj_type(ctx, got_mt) == KS_SCRIPT_OBJECT_TYPE_TABLE);
+
+            ks_script_table_set(ctx, mt, ks_script_create_cstring(ctx, "flag"), ks_script_create_boolean(ctx, ks_true));
+
+            Ks_Script_Object flag = ks_script_table_get(ctx, got_mt, ks_script_create_cstring(ctx, "flag"));
+            CHECK(ks_script_obj_as_boolean(ctx, flag) == ks_true);
+
+        } ks_script_end_scope(ctx);
+    }
+
+    SUBCASE("11. Userdata & LightUserdata") {
+        ks_script_begin_scope(ctx); {
+
+            int dummy_int = 42;
+            void* ptr = &dummy_int;
+
+            Ks_Script_LightUserdata lud = ks_script_create_lightuserdata(ctx, ptr);
+            CHECK(ks_script_obj_type(ctx, lud) == KS_SCRIPT_OBJECT_TYPE_LIGHTUSERDATA);
+
+            void* got_ptr = ks_script_lightuserdata_get_ptr(ctx, lud);
+            CHECK(got_ptr == ptr);
+
+            struct MyData { int x; float y; };
+            Ks_Script_Userdata ud = ks_script_create_userdata(ctx, sizeof(MyData));
+            CHECK(ks_script_obj_type(ctx, ud) == KS_SCRIPT_OBJECT_TYPE_USERDATA);
+
+            MyData* data_ptr = (MyData*)ks_script_userdata_get_ptr(ctx, ud);
+            REQUIRE(data_ptr != nullptr);
+            data_ptr->x = 100;
+            data_ptr->y = 3.14f;
+
+            MyData* read_ptr = (MyData*)ks_script_userdata_get_ptr(ctx, ud);
+            CHECK(read_ptr->x == 100);
+            CHECK(read_ptr->y == 3.14f);
 
         } ks_script_end_scope(ctx);
     }
