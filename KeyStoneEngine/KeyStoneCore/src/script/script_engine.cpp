@@ -1380,6 +1380,7 @@ KS_API Ks_Script_Object ks_script_stack_get(Ks_Script_Ctx ctx, ks_stack_idx i)
     if (!ctx) return ks_script_create_invalid_obj(ctx);
 
     Ks_Script_Object obj = ks_script_stack_peek(ctx, i);
+    return obj;
 }
 
 KS_API ks_size ks_script_stack_size(Ks_Script_Ctx ctx)
