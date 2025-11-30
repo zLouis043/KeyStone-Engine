@@ -29,6 +29,9 @@ project "KeyStoneTests"
 
    debugargs { "-s -d" }
    
+   filter "system:windows"
+      buildoptions { "/utf-8", "/Zc:preprocessor" }
+
    filter "configurations:Debug"
       defines { "DEBUG", "_DEBUG" }
       symbols "On"

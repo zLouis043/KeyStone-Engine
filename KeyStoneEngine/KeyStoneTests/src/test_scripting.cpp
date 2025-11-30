@@ -41,15 +41,15 @@ ks_returns_count hero_new_void(Ks_Script_Ctx ctx) {
 
 ks_returns_count hero_new_name(Ks_Script_Ctx ctx) {
     Hero* self = (Hero*)ks_script_get_self(ctx);
-    const char* name = ks_script_obj_as_str(ctx, ks_script_get_arg(ctx, 1));
+    const char* name = ks_script_obj_as_str(ctx, ks_script_get_arg(ctx, 0));
     new(self) Hero(name ? name : "Unknown", 100);
     return 0;
 }
 
 ks_returns_count hero_new_full(Ks_Script_Ctx ctx) {
     Hero* self = (Hero*)ks_script_get_self(ctx);
-    const char* name = ks_script_obj_as_str(ctx, ks_script_get_arg(ctx, 1));
-    int hp = (int)ks_script_obj_as_number(ctx, ks_script_get_arg(ctx, 2));
+    const char* name = ks_script_obj_as_str(ctx, ks_script_get_arg(ctx, 0));
+    int hp = (int)ks_script_obj_as_number(ctx, ks_script_get_arg(ctx, 1));
     new(self) Hero(name ? name : "Unknown", hp);
     return 0;
 }
@@ -60,7 +60,7 @@ void hero_delete(ks_ptr data, ks_size size) {
 
 ks_returns_count hero_heal(Ks_Script_Ctx ctx) {
     Hero* self = (Hero*)ks_script_get_self(ctx);
-    Ks_Script_Object amt = ks_script_get_arg(ctx, 1);
+    Ks_Script_Object amt = ks_script_get_arg(ctx, 0);
     self->heal((int)ks_script_obj_as_number(ctx, amt));
     return 0;
 }
@@ -73,7 +73,7 @@ ks_returns_count hero_get_hp(Ks_Script_Ctx ctx) {
 
 ks_returns_count hero_set_hp(Ks_Script_Ctx ctx) {
     Hero* self = (Hero*)ks_script_get_self(ctx);
-    Ks_Script_Object val = ks_script_get_arg(ctx, 1);
+    Ks_Script_Object val = ks_script_get_arg(ctx, 0);
     if (self) self->hp = (int)ks_script_obj_as_number(ctx, val);
     return 0;
 }
@@ -87,7 +87,7 @@ ks_returns_count hero_attack_basic(Ks_Script_Ctx ctx) {
 
 ks_returns_count hero_attack_strong(Ks_Script_Ctx ctx) {
     Hero* self = (Hero*)ks_script_get_self(ctx);
-    int input_dmg = (int)ks_script_obj_as_number(ctx, ks_script_get_arg(ctx, 1));
+    int input_dmg = (int)ks_script_obj_as_number(ctx, ks_script_get_arg(ctx, 0));
     int dmg = self->attack_strong(input_dmg);
     ks_script_stack_push_obj(ctx, ks_script_create_number(ctx, dmg));
     return 1;
@@ -188,8 +188,8 @@ TEST_CASE("C API: Script Engine Suite") {
     SUBCASE("Functions: C calling Lua & Lua calling C") {
         ks_script_begin_scope(ctx); {
             ks_script_cfunc add_func = [](Ks_Script_Ctx c) -> ks_returns_count {
-                double a = ks_script_obj_as_number(c, ks_script_get_arg(c, 1));
-                double b = ks_script_obj_as_number(c, ks_script_get_arg(c, 2));
+                double a = ks_script_obj_as_number(c, ks_script_get_arg(c, 0));
+                double b = ks_script_obj_as_number(c, ks_script_get_arg(c, 1));
 
                 ks_script_stack_push_obj(c, ks_script_create_number(c, a + b));
                 return 1;
@@ -223,7 +223,7 @@ TEST_CASE("C API: Script Engine Suite") {
         ks_script_begin_scope(ctx); {
 
             ks_script_cfunc counter_func = [](Ks_Script_Ctx c) -> ks_returns_count {
-                Ks_Script_Object up_tbl = ks_script_func_get_upvalue(c, 1);
+                Ks_Script_Object up_tbl = ks_script_func_get_upvalue(c, 0);
                 Ks_Script_Object key = ks_script_create_cstring(c, "val");
 
                 double val = ks_script_obj_as_number(c, ks_script_table_get(c, static_cast<Ks_Script_Table>(up_tbl), key));
@@ -315,7 +315,7 @@ TEST_CASE("C API: Script Engine Suite") {
         } ks_script_end_scope(ctx);
     }
 
-    SUBCASE("11. Userdata & LightUserdata") {
+    SUBCASE("Userdata & LightUserdata") {
         ks_script_begin_scope(ctx); {
 
             int dummy_int = 42;

@@ -284,7 +284,7 @@ KS_API ks_no_ret ks_script_func_call(Ks_Script_Ctx ctx, Ks_Script_Function f,
                               ks_size n_args, ks_size n_rets);
 
 #define ks_script_func_callv(ctx, func, ...)                                   \
-  ks_script_func_callv_impl(ctx, func, __VA_ARGS__,                            \
+  ks_script_func_callv_impl(ctx, func __VA_OPT__(,) __VA_ARGS__,                            \
                             ks_script_create_invalid_obj(ctx));
 KS_API Ks_Script_Function_Call_Result
 ks_script_func_callv_impl(Ks_Script_Ctx ctx, Ks_Script_Function f, ...);
@@ -304,7 +304,7 @@ KS_API Ks_Script_Coroutine_Status ks_script_coroutine_status(Ks_Script_Ctx ctx, 
 KS_API Ks_Script_Function_Call_Result ks_script_coroutine_resume(Ks_Script_Ctx ctx, Ks_Script_Coroutine coroutine, ks_size n_args);
 
 #define ks_script_coroutine_resumev(ctx, coroutine, ...) \
-    ks_script_coroutine_resumev_impl(ctx, coroutine, __VA_ARGS__, ks_script_create_invalid_obj(ctx))
+    ks_script_coroutine_resumev_impl(ctx, coroutine __VA_OPT__(,) __VA_ARGS__, ks_script_create_invalid_obj(ctx))
 
 KS_API Ks_Script_Function_Call_Result ks_script_coroutine_resumev_impl(Ks_Script_Ctx ctx, Ks_Script_Coroutine coroutine, ...);
 

@@ -445,8 +445,13 @@ Ks_Script_Function_Call_Result ks_script_func_callv_impl(Ks_Script_Ctx ctx, Ks_S
 
         for (int i = n_results; i >= 1; i--) {
             Ks_Script_Object val = ks_script_stack_pop_obj(ctx);
-            Ks_Script_Object key = ks_script_create_number(ctx, i);
-            ks_script_table_set(ctx, result_table, key, val);
+
+            sctx->get_from_registry(result_table.val.table_ref);
+            ks_script_stack_push_obj(ctx, val);
+            lua_rawseti(L, -2, i);
+            lua_pop(L, 1);
+
+            ks_script_free_obj(ctx, val);
         }
 
         return result_table;
@@ -460,12 +465,9 @@ KS_API Ks_Script_Object ks_script_func_get_upvalue(Ks_Script_Ctx ctx, ks_upvalue
     auto* sctx = static_cast<KsScriptEngineCtx*>(ctx);
     lua_State* L = sctx->get_raw_state();
 
-    lua_getupvalue(L, -1, i);
+    int internal_index = lua_upvalueindex((int)i + 2);
 
-    if (lua_isnil(L, -1)) {
-        lua_pop(L, 1);
-        return ks_script_create_invalid_obj(ctx);
-    }
+    lua_pushvalue(L, internal_index);
 
     return ks_script_stack_pop_obj(ctx);
 }
@@ -590,10 +592,13 @@ KS_API Ks_Script_Function_Call_Result ks_script_coroutine_resume(Ks_Script_Ctx c
             Ks_Script_Table result_table = ks_script_create_table(ctx);
             for (int i = n_results; i >= 1; i--) {
                 Ks_Script_Object val = ks_script_stack_pop_obj(ctx);
-                ks_script_table_set(ctx, result_table,
-                    ks_script_create_number(ctx, i),
-                    val
-                );
+
+                sctx->get_from_registry(result_table.val.table_ref);
+                ks_script_stack_push_obj(ctx, val);
+                lua_rawseti(L, -2, i);
+                lua_pop(L, 1);
+
+                ks_script_free_obj(ctx, val);
             }
             return result_table;
         }
@@ -2074,7 +2079,7 @@ Ks_Script_Object ks_script_get_arg(Ks_Script_Ctx ctx, ks_stack_idx n)
 {
     if (!ctx) return ks_script_create_invalid_obj(ctx);
     auto* sctx = static_cast<KsScriptEngineCtx*>(ctx);
-    return ks_script_stack_peek(ctx, n + sctx->current_frame().arg_offset);
+    return ks_script_stack_peek(ctx, (n + 1) + sctx->current_frame().arg_offset);
 }
 
 Ks_Script_Object ks_script_get_upvalue(Ks_Script_Ctx ctx, ks_upvalue_idx n)

@@ -42,7 +42,7 @@ project("KeyStoneCore")
 	filter "system:windows"
         system "windows"
         defines { "WINDOWS", "_WINDOWS" }
-        buildoptions { "/utf-8" }
+        buildoptions { "/utf-8", "/Zc:preprocessor" }
 
     filter "system:linux"
         system "linux"

@@ -41,4 +41,4 @@ project "KeyStone-CLI"
          "WINDOWS",
          "_WINDOWS"
       }
-      buildoptions { "/utf-8" }
+      buildoptions { "/utf-8", "/Zc:preprocessor" }
