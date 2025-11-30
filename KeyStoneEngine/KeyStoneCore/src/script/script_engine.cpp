@@ -465,7 +465,7 @@ KS_API Ks_Script_Object ks_script_func_get_upvalue(Ks_Script_Ctx ctx, ks_upvalue
     auto* sctx = static_cast<KsScriptEngineCtx*>(ctx);
     lua_State* L = sctx->get_raw_state();
 
-    int internal_index = lua_upvalueindex((int)i + 2);
+    int internal_index = lua_upvalueindex((int)i + 1);
 
     lua_pushvalue(L, internal_index);
 
@@ -2079,7 +2079,7 @@ Ks_Script_Object ks_script_get_arg(Ks_Script_Ctx ctx, ks_stack_idx n)
 {
     if (!ctx) return ks_script_create_invalid_obj(ctx);
     auto* sctx = static_cast<KsScriptEngineCtx*>(ctx);
-    return ks_script_stack_peek(ctx, (n + 1) + sctx->current_frame().arg_offset);
+    return ks_script_stack_peek(ctx, n + sctx->current_frame().arg_offset);
 }
 
 Ks_Script_Object ks_script_get_upvalue(Ks_Script_Ctx ctx, ks_upvalue_idx n)
