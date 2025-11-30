@@ -10,14 +10,13 @@ project "KeyStone-CLI"
    }
    
    includedirs {
-      vcpkg.static.includedir,
+      vcpkg.includedir,
       "../KeyStoneCore/",
       "../KeyStoneCore/include/"
    }
 
    libdirs {
-      vcpkg.static.libdir,
-      vcpkg.static.bindir,
+      vcpkg.libdir,
       "../build/bin/%{cfg.buildcfg}" 
    }
 

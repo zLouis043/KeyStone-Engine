@@ -48,8 +48,6 @@ local function setupVcpkg()
 end
 vcpkg = setupVcpkg()
 
-print("vcpkg.static.libdir: " .. vcpkg.static.libdir)
-
 workspace("Keystone-Engine")
 configurations({ "Debug", "Release" })
 platforms({ "x64" })
