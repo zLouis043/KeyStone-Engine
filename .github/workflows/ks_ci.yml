@@ -19,7 +19,7 @@ jobs:
           # --- WINDOWS CONFIG ---
           - os: windows-latest
             platform: windows
-            setup_cmd: cd Scripts && .\setup.bat
+            setup_cmd: cd Scripts/Windows && .\Setup.bat
             premake_action: vs2022
             build_cmd: msbuild KeyStone-Engine.sln /p:Configuration=Debug /p:Platform=x64 /m
             test_bin: KeyStoneEngine\build\bin\Debug\KeyStoneTests.exe
@@ -27,7 +27,7 @@ jobs:
           # --- LINUX CONFIG ---
           - os: ubuntu-latest
             platform: linux
-            setup_cmd: cd Scripts && chmod +x setup.sh && ./setup.sh
+            setup_cmd: cd Scripts/Linux && chmod +x Setup.sh && ./Setup.sh
             premake_action: gmake2
             build_cmd: make config=debug_x64 -j$(nproc)
             test_bin: ./KeyStoneEngine/build/bin/Debug/KeyStoneTests
@@ -35,7 +35,7 @@ jobs:
           # --- MACOS CONFIG ---
           - os: macos-latest
             platform: macos
-            setup_cmd: cd Scripts && chmod +x setup.sh && ./setup.sh
+            setup_cmd: cd Scripts/Macos && chmod +x Setup.sh && ./Setup.sh
             premake_action: gmake2
             build_cmd: make config=debug_x64 -j$(sysctl -n hw.ncpu)
             test_bin: ./KeyStoneEngine/build/bin/Debug/KeyStoneTests
@@ -78,7 +78,7 @@ jobs:
       uses: actions/cache@v3
       with:
         path: vendor/vcpkg/installed
-        key: ${{ runner.os }}-vcpkg-${{ hashFiles('Scripts/setup.bat', 'Scripts/setup.sh') }}
+        key: ${{ runner.os }}-vcpkg-${{ hashFiles('Scripts/Windows/Setup.bat', 'Scripts/Linux/Setup.sh', 'Scripts/MacOS/Setup.sh') }}
 
     - name: Install Dependencies
       run: ${{ matrix.setup_cmd }}
