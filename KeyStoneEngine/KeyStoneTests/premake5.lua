@@ -9,7 +9,7 @@ project "KeyStoneTests"
    files { 
       "main.cpp",
       "src/**.cpp",
-      "src/**.h"
+      "include/**.h"
    }
    
    includedirs {

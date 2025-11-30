@@ -36,7 +36,8 @@ public:
 
 	Ks_AssetData get_asset_data_from_handle(Ks_AssetHandle handle);
 	std::string  get_asset_name_from_handle(Ks_AssetHandle handle);
-	std::string  get_asset_type_from_handle(Ks_AssetHandle handle);
+	std::string&  get_asset_type_from_handle(Ks_AssetHandle handle);
+	const char* get_asset_type_from_handle_raw(Ks_AssetHandle handle);
 	uint32_t  get_asset_ref_count_from_handle(Ks_AssetHandle handle);
 
 	bool is_handle_valid(Ks_AssetHandle handle);
@@ -85,11 +86,18 @@ std::string AssetManager_Impl::get_asset_name_from_handle(Ks_AssetHandle handle)
 	return found->second.asset_name;
 }
 
-std::string AssetManager_Impl::get_asset_type_from_handle(Ks_AssetHandle handle)
+std::string& AssetManager_Impl::get_asset_type_from_handle(Ks_AssetHandle handle)
 {
+	static std::string empty = "nullptr";
 	auto found = assets_entries.find(handle);
-	if (found == assets_entries.end()) return "nullptr";
+	if (found == assets_entries.end()) return empty;
 	return found->second.type_name;
+}
+
+const char* AssetManager_Impl::get_asset_type_from_handle_raw(Ks_AssetHandle handle) {
+	auto found = assets_entries.find(handle);
+	if (found == assets_entries.end()) return nullptr;
+	return found->second.type_name.c_str();
 }
 
 uint32_t AssetManager_Impl::get_asset_ref_count_from_handle(Ks_AssetHandle handle)
@@ -287,6 +295,13 @@ KS_API Ks_AssetData ks_assets_manager_get_data(Ks_AssetsManager am, Ks_AssetHand
 	}
 
 	return iam->get_asset_data_from_handle(handle);
+}
+
+KS_API ks_str ks_assets_manager_get_type_name(Ks_AssetsManager am, Ks_AssetHandle handle)
+{
+	AssetManager_Impl* iam = static_cast<AssetManager_Impl*>(am.impl);
+	if (handle == KS_INVALID_ASSET_HANDLE) return nullptr;
+	return iam->get_asset_type_from_handle_raw(handle);
 }
 
 KS_API ks_uint32 ks_assets_manager_get_ref_count(Ks_AssetsManager am, Ks_AssetHandle handle)

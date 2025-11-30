@@ -95,6 +95,14 @@ KS_API Ks_AssetData ks_assets_manager_get_data(Ks_AssetsManager am,
                                                Ks_AssetHandle handle);
 
 /**
+ * @brief Gets the registered type name of the asset (e.g. "Texture", "Sound").
+ * @param am The Assets Manager.
+ * @param handle The asset handle.
+ * @return The type name string, or NULL if invalid.
+ */
+KS_API ks_str ks_assets_manager_get_type_name(Ks_AssetsManager am, Ks_AssetHandle handle);
+
+/**
  * @brief Gets the current reference count of an asset.
  *
  * @param am The Assets Manager.

@@ -395,7 +395,7 @@ Ks_Script_Object ks_script_create_usertype_ref(Ks_Script_Ctx ctx, ks_str type_na
     Ks_Script_Object obj;
     obj.type = KS_SCRIPT_OBJECT_TYPE_USERDATA;
     obj.state = KS_SCRIPT_OBJECT_VALID;
-    obj.val.userdata_ref = sctx->store_in_registry();
+    obj.val.userdata_ref = ref;
 
     return obj;
 }

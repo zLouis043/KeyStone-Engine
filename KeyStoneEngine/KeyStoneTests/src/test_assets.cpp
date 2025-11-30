@@ -2,40 +2,7 @@
 #include <keystone.h>
 #include <string.h>
 
-typedef struct {
-    int id;
-    float value;
-    char name[32];
-} MyCAsset;
-
-Ks_AssetData my_asset_load_file(ks_str file_path) {
-    MyCAsset* asset = (MyCAsset*)ks_alloc(sizeof(MyCAsset), KS_LT_USER_MANAGED, KS_TAG_RESOURCE);
-    if (!asset) return KS_INVALID_ASSET_DATA;
-
-    asset->id = 100;
-    asset->value = 3.14f;
-    if (file_path) {
-        strncpy(asset->name, file_path, 31);
-        asset->name[31] = '\0';
-    }
-    else {
-        strcpy(asset->name, "Unknown");
-    }
-
-    return (Ks_AssetData)asset;
-}
-
-Ks_AssetData my_asset_load_data(const ks_byte* data) {
-    MyCAsset* asset = (MyCAsset*)ks_alloc(sizeof(MyCAsset), KS_LT_USER_MANAGED, KS_TAG_RESOURCE);
-    if (!asset) return KS_INVALID_ASSET_DATA;
-    asset->id = 200;
-    return (Ks_AssetData)asset;
-}
-
-ks_no_ret my_asset_destroy(Ks_AssetData data) {
-    MyCAsset* asset = (MyCAsset*)data;
-    ks_dealloc(asset);
-}
+#include "../include/common.h"
 
 TEST_CASE("C API: Assets Manager") {
     ks_memory_init();
