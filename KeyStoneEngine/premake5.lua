@@ -33,6 +33,7 @@ startproject("KeyStone-CLI")
 
 include("./KeyStoneCore/premake5.lua")
 include("./KeyStoneCLI/premake5.lua")
+include("./KeyStoneTests/premake5.lua")
 
 newaction({
 	trigger = "clean",

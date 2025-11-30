@@ -101,7 +101,7 @@ uint32_t AssetManager_Impl::get_asset_ref_count_from_handle(Ks_AssetHandle handl
 
 bool AssetManager_Impl::is_handle_valid(Ks_AssetHandle handle)
 {
-	return assets_entries.find(handle) == assets_entries.end();
+	return assets_entries.find(handle) != assets_entries.end();
 }
 
 void AssetManager_Impl::acquire_asset(Ks_AssetHandle handle)

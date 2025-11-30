@@ -156,6 +156,8 @@ KS_API Ks_Script_Object ks_script_create_cstring(Ks_Script_Ctx ctx, ks_str val);
 KS_API Ks_Script_Object ks_script_create_lstring(Ks_Script_Ctx ctx, ks_str str,
                                           ks_size len);
 KS_API Ks_Script_Userdata ks_script_create_userdata(Ks_Script_Ctx ctx, ks_size size);
+KS_API Ks_Script_Userdata ks_script_create_usertype_instance(Ks_Script_Ctx ctx, ks_str type_name);
+KS_API Ks_Script_Object ks_script_create_usertype_ref(Ks_Script_Ctx ctx, ks_str type_name, void* ptr);
 
 KS_API ks_no_ret ks_script_free_obj(Ks_Script_Ctx ctx, Ks_Script_Object obj);
 
@@ -320,6 +322,8 @@ KS_API ks_ptr ks_script_userdata_get_ptr(Ks_Script_Ctx ctx, Ks_Script_Userdata u
 
 KS_API ks_no_ret ks_script_set_type_name(Ks_Script_Ctx ctx, Ks_Script_Object obj, ks_str type_name);
 KS_API ks_ptr ks_script_get_self(Ks_Script_Ctx ctx);
+
+KS_API ks_ptr ks_script_usertype_get_ptr(Ks_Script_Ctx ctx, Ks_Script_Object obj);
 
 KS_API Ks_Script_Userytype_Builder ks_script_usertype_begin(Ks_Script_Ctx ctx, ks_str type_name, ks_size instance_size);
 

@@ -56,15 +56,21 @@ void MemoryManager::set_resource_pools_config(const std::vector<std::pair<size_t
 
 MemoryManager& MemoryManager::get_instance() {
     std::lock_guard<std::mutex> lock(s_instance_mutex);
-    if (!s_instance && !s_shutdown_flag.load()) {
+    if (!s_instance) {
+        s_shutdown_flag.store(false);
+
         s_instance = std::make_unique<MemoryManager>();
-        
+            
+        static bool atexit_registered = false;
         // Register cleanup function to avoid static destruction order issues
-        std::atexit([]() {
-            s_shutdown_flag.store(true);
-            std::lock_guard<std::mutex> lock(s_instance_mutex);
-            s_instance.reset();
-        });
+        if (!atexit_registered) {
+            std::atexit([]() {
+                s_shutdown_flag.store(true);
+                std::lock_guard<std::mutex> lock(s_instance_mutex);
+                s_instance.reset();
+                });
+            atexit_registered = true;
+        }
     }
     return *s_instance;
 }

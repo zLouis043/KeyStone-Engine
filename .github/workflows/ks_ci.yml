@@ -1,0 +1,86 @@
+name: KeyStone CI
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # --- WINDOWS CONFIG ---
+          - os: windows-latest
+            platform: windows
+            setup_script: call setup.bat
+            premake_action: vs2022
+            build_cmd: msbuild KeyStone-Engine.sln /p:Configuration=Debug /p:Platform=x64 /m
+            test_bin: KeyStoneEngine\build\bin\Debug\KeyStoneTests.exe
+
+          # --- LINUX CONFIG ---
+          - os: ubuntu-latest
+            platform: linux
+            setup_script: chmod +x setup.sh && ./setup.sh
+            premake_action: gmake2
+            build_cmd: make config=debug_x64 -j$(nproc)
+            test_bin: ./KeyStoneEngine/build/bin/Debug/KeyStoneTests
+
+          # --- MACOS CONFIG ---
+          - os: macos-latest
+            platform: macos
+            setup_script: chmod +x setup.sh && ./setup.sh
+            premake_action: gmake2
+
+            build_cmd: make config=debug_x64 -j$(sysctl -n hw.ncpu)
+            test_bin: ./KeyStoneEngine/build/bin/Debug/KeyStoneTests
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup Premake
+      uses: abel0b/setup-premake@v1
+      with:
+        version: "5.0.0-beta2"
+
+    - name: Setup MSVC (Windows)
+      if: matrix.platform == 'windows'
+      uses: ilammy/msvc-dev-cmd@v1
+
+    - name: Install Linux Dependencies
+      if: matrix.platform == 'linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential libreadline-dev
+
+    - name: Cache Vcpkg
+      uses: actions/cache@v3
+      with:
+        path: vendor/vcpkg/installed
+        key: ${{ runner.os }}-vcpkg-${{ hashFiles('Scripts/setup.bat', 'Scripts/setup.sh') }}
+        restore-keys: |
+          ${{ runner.os }}-vcpkg-
+
+    - name: Install Dependencies
+      working-directory: ./Scripts
+      run: ${{ matrix.setup_script }}
+
+    - name: Generate Build Files
+      working-directory: ./KeyStoneEngine
+      run: premake5 ${{ matrix.premake_action }}
+
+    - name: Build Project
+      working-directory: ./KeyStoneEngine
+      run: ${{ matrix.build_cmd }}
+      
+    - name: Execute Tests
+      run: ${{ matrix.test_bin }} -s -d

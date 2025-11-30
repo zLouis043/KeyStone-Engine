@@ -3,3 +3,4 @@ cd ../vendor/vcpkg/
 ./vcpkg install lua
 ./vcpkg install sol2
 ./vcpkg install spdlog
+./vcpkg install doctest

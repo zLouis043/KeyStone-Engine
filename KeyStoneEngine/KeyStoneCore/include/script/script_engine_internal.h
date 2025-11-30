@@ -21,6 +21,11 @@ struct CallFrame {
 	int upval_offset = 0;
 };
 
+struct UsertypeInfo {
+	ks_size size;
+	std::string name;
+};
+
 class KsScriptEngineCtx {
 public:
 	using Scope = std::vector<Ks_Script_Ref>;
@@ -133,6 +138,16 @@ public:
 		return p_call_stack.back();
 	}
 
+	void register_usertype_info(const std::string& name, UsertypeInfo info) {
+		usertype_registry[name] = info;
+	}
+
+	UsertypeInfo* get_usertype_info(const std::string& name) {
+		auto it = usertype_registry.find(name);
+		if (it == usertype_registry.end()) return nullptr;
+		return &it->second;
+	}
+
 	const Ks_Script_Error_Info& get_error_info() const { return p_error_info;  }
 
 private:
@@ -151,6 +166,7 @@ private:
 	Ks_Script_Error_Info p_error_info;
 	std::vector<Scope> p_scopes;
 	std::vector<CallFrame> p_call_stack;
+	std::map<std::string, UsertypeInfo> usertype_registry;
 };
 
 struct MethodInfo {
