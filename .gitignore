@@ -13,3 +13,6 @@ TODO.md
 build/
 
 old/
+
+./KeyStoneEngine/KeyStoneCLI/engine.cpp
+./KeyStoneEngine/KeyStoneCLI/engine.h
