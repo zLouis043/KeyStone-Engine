@@ -19,7 +19,8 @@ jobs:
           # --- WINDOWS CONFIG ---
           - os: windows-latest
             platform: windows
-            setup_script: call setup.bat
+            # FIX: Rimosso 'call'. PowerShell esegue il .bat direttamente.
+            setup_script: .\setup.bat 
             premake_action: vs2022
             build_cmd: msbuild KeyStone-Engine.sln /p:Configuration=Debug /p:Platform=x64 /m
             test_bin: KeyStoneEngine\build\bin\Debug\KeyStoneTests.exe
@@ -37,7 +38,6 @@ jobs:
             platform: macos
             setup_script: chmod +x setup.sh && ./setup.sh
             premake_action: gmake2
-
             build_cmd: make config=debug_x64 -j$(sysctl -n hw.ncpu)
             test_bin: ./KeyStoneEngine/build/bin/Debug/KeyStoneTests
 
@@ -47,10 +47,9 @@ jobs:
       with:
         submodules: recursive
 
+    # FIX: Rimosso 'with: version' perché questa action non accetta argomenti (installa l'ultima beta di default)
     - name: Setup Premake
       uses: abel0b/setup-premake@v1
-      with:
-        version: "5.0.0-beta2"
 
     - name: Setup MSVC (Windows)
       if: matrix.platform == 'windows'
@@ -83,4 +82,5 @@ jobs:
       run: ${{ matrix.build_cmd }}
       
     - name: Execute Tests
+      # Il flag -s serve a vedere i test passati nel log, utile per debuggare in CI
       run: ${{ matrix.test_bin }} -s -d
