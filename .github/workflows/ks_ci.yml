@@ -19,8 +19,8 @@ jobs:
           # --- WINDOWS CONFIG ---
           - os: windows-latest
             platform: windows
-            # FIX: Rimosso 'call'. PowerShell esegue il .bat direttamente.
-            setup_script: .\setup.bat 
+            # FIX: In PowerShell si usa .\script.bat, 'call' non esiste
+            setup_script: .\setup.bat
             premake_action: vs2022
             build_cmd: msbuild KeyStone-Engine.sln /p:Configuration=Debug /p:Platform=x64 /m
             test_bin: KeyStoneEngine\build\bin\Debug\KeyStoneTests.exe
@@ -47,7 +47,7 @@ jobs:
       with:
         submodules: recursive
 
-    # FIX: Rimosso 'with: version' perché questa action non accetta argomenti (installa l'ultima beta di default)
+    # FIX: Rimosso 'with: version' che causava l'errore su Linux/Mac
     - name: Setup Premake
       uses: abel0b/setup-premake@v1
 
@@ -82,5 +82,4 @@ jobs:
       run: ${{ matrix.build_cmd }}
       
     - name: Execute Tests
-      # Il flag -s serve a vedere i test passati nel log, utile per debuggare in CI
       run: ${{ matrix.test_bin }} -s -d
