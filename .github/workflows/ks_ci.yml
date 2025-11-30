@@ -19,8 +19,8 @@ jobs:
           # --- WINDOWS CONFIG ---
           - os: windows-latest
             platform: windows
-            # FIX: In PowerShell si usa .\script.bat, 'call' non esiste
-            setup_script: .\setup.bat
+            # Setup.bat DEVE essere eseguito dalla sua directory
+            setup_cmd: cd Scripts && .\setup.bat
             premake_action: vs2022
             build_cmd: msbuild KeyStone-Engine.sln /p:Configuration=Debug /p:Platform=x64 /m
             test_bin: KeyStoneEngine\build\bin\Debug\KeyStoneTests.exe
@@ -28,7 +28,7 @@ jobs:
           # --- LINUX CONFIG ---
           - os: ubuntu-latest
             platform: linux
-            setup_script: chmod +x setup.sh && ./setup.sh
+            setup_cmd: cd Scripts && chmod +x setup.sh && ./setup.sh
             premake_action: gmake2
             build_cmd: make config=debug_x64 -j$(nproc)
             test_bin: ./KeyStoneEngine/build/bin/Debug/KeyStoneTests
@@ -36,7 +36,7 @@ jobs:
           # --- MACOS CONFIG ---
           - os: macos-latest
             platform: macos
-            setup_script: chmod +x setup.sh && ./setup.sh
+            setup_cmd: cd Scripts && chmod +x setup.sh && ./setup.sh
             premake_action: gmake2
             build_cmd: make config=debug_x64 -j$(sysctl -n hw.ncpu)
             test_bin: ./KeyStoneEngine/build/bin/Debug/KeyStoneTests
@@ -47,6 +47,7 @@ jobs:
       with:
         submodules: recursive
 
+    # --- INSTALLAZIONE MANUALE PREMAKE5 ---
     - name: Install Premake (Windows)
       if: matrix.platform == 'windows'
       run: |
@@ -65,6 +66,7 @@ jobs:
       if: matrix.platform == 'macos'
       run: brew install premake
 
+    # --- SETUP COMPILATORE ---
     - name: Setup MSVC (Windows)
       if: matrix.platform == 'windows'
       uses: ilammy/msvc-dev-cmd@v1
@@ -75,25 +77,9 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y build-essential libreadline-dev
 
+    # --- CACHE VCPKG ---
     - name: Cache Vcpkg
       uses: actions/cache@v3
       with:
         path: vendor/vcpkg/installed
         key: ${{ runner.os }}-vcpkg-${{ hashFiles('Scripts/setup.bat', 'Scripts/setup.sh') }}
-        restore-keys: |
-          ${{ runner.os }}-vcpkg-
-
-    - name: Install Dependencies
-      working-directory: ./Scripts
-      run: ${{ matrix.setup_script }}
-
-    - name: Generate Build Files
-      working-directory: ./KeyStoneEngine
-      run: premake5 ${{ matrix.premake_action }}
-
-    - name: Build Project
-      working-directory: ./KeyStoneEngine
-      run: ${{ matrix.build_cmd }}
-      
-    - name: Execute Tests
-      run: ${{ matrix.test_bin }} -s -d

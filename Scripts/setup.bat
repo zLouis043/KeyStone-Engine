@@ -1,6 +1,16 @@
-cd ../vendor/vcpkg/ 
-./bootstrap-vcpkg.bat
-vcpkg install lua
-vcpkg install sol2
-vcpkg install spdlog
-vcpkg install doctest
+@echo off
+rem
+pushd ..\vendor\vcpkg
+
+rem
+call bootstrap-vcpkg.bat
+
+rem
+vcpkg.exe install lua:x64-windows-static
+vcpkg.exe install sol2:x64-windows-static
+vcpkg.exe install spdlog:x64-windows-static
+vcpkg.exe install doctest:x64-windows-static
+
+rem
+popd
+pause

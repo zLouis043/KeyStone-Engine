@@ -1,57 +1,61 @@
 project("KeyStoneCore")
-kind("SharedLib")
-language("C++")
-cppdialect("C++20")
-staticruntime "On"
+	kind("SharedLib")
+	language("C++")
+	cppdialect("C++20")
+	staticruntime "On"
 
-targetdir("../build/bin/%{cfg.buildcfg}")
-objdir("../build/obj/%{cfg.buildcfg}")
+	targetdir("../build/bin/%{cfg.buildcfg}")
+	objdir("../build/obj/%{cfg.buildcfg}")
 
-files({
-	"**.h",
-	"**.hpp",
-	"**.cpp",
-	"./include/**.h",
-	"./include/**.hpp",
-	"./include/**.inl",
-	"./src/**.cpp",
-})
+	files({
+		"**.h",
+		"**.hpp",
+		"**.cpp",
+		"./include/**.h",
+		"./include/**.hpp",
+		"./include/**.inl",
+		"./src/**.cpp",
+	})
 
-includedirs({
-	"./src",
-	"./include",
-	vcpkg.static.includedir,
-})
+	includedirs({
+		"./src",
+		"./include",
+		vcpkg.includedir,
+	})
 
-libdirs({
-	vcpkg.static.libdir,
-	vcpkg.static.bindir,
-})
+	libdirs({
+		vcpkg.libdir
+	})
 
-links({
-	"lua"
-})
+	links({
+		"lua"
+	})
 
-defines({
-	"KS_EXPORT",
-	"FMT_HEADER_ONLY",     -- fmt diventa header-only, niente linking
-	"SPDLOG_HEADER_ONLY",  -- spdlog diventa header-only, niente linking
-})
+	defines({
+		"KS_EXPORT",
+		"FMT_HEADER_ONLY",
+		"SPDLOG_HEADER_ONLY",
+	})
 
-characterset("Unicode")
+	characterset("Unicode")
 
-filter("system:windows")
-system("windows")
-defines({
-	"WINDOWS",
-	"_WINDOWS",
-})
-buildoptions({ "/utf-8" })
+	filter "system:windows"
+        system "windows"
+        defines { "WINDOWS", "_WINDOWS" }
+        buildoptions { "/utf-8" }
 
-filter("configurations:Debug")
-defines({ "DEBUG" })
-symbols("On")
+    filter "system:linux"
+        system "linux"
+        links { "dl" }
+        buildoptions { "-fPIC" }
 
-filter("configurations:Release")
-defines({ "NDEBUG" })
-optimize("On")
+    filter "system:macosx"
+        system "macosx"
+        
+    filter "configurations:Debug"
+        defines { "DEBUG" }
+        symbols "On"
+
+    filter "configurations:Release"
+        defines { "NDEBUG" }
+        optimize "On"
