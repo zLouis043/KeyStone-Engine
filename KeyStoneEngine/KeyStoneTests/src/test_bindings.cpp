@@ -35,9 +35,6 @@ TEST_CASE("Managers-Lua bindings Tests") {
             local data = assets.get_data(h)
             
             local data = assets.get_data(h)
-            print("Type of data:", type(data)) -- Aggiungi questa riga
-            print("Value of data:", data)      -- Aggiungi questa riga
-            print(data.id)
 
             print(data.id)
         
