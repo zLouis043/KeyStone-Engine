@@ -13,6 +13,7 @@ extern "C" {
 }
 #endif
 
+#include <string.h>
 #include <vector>
 #include <map>
 #include <stdarg.h>
@@ -143,7 +144,7 @@ KS_API Ks_Script_Object ks_script_create_nil(Ks_Script_Ctx ctx)
     Ks_Script_Object obj;
     obj.type = KS_SCRIPT_OBJECT_TYPE_NIL;
     obj.state = KS_SCRIPT_OBJECT_VALID;
-    std::memset(&obj.val, 0, sizeof(obj.val));
+    memset(&obj.val, 0, sizeof(obj.val));
     return obj;
 }
 
@@ -152,7 +153,7 @@ KS_API Ks_Script_Object ks_script_create_invalid_obj(Ks_Script_Ctx ctx)
     Ks_Script_Object obj;
     obj.type = KS_SCRIPT_OBJECT_TYPE_NIL;
     obj.state = KS_SCRIPT_OBJECT_INVALID;
-    std::memset(&obj.val, 0, sizeof(obj.val));
+    memset(&obj.val, 0, sizeof(obj.val));
     return obj;
 }
 
@@ -326,6 +327,7 @@ KS_API Ks_Script_Object ks_script_create_lstring(Ks_Script_Ctx ctx, ks_str str, 
     obj.type = KS_SCRIPT_OBJECT_TYPE_STRING;
     obj.state = KS_SCRIPT_OBJECT_VALID;
     obj.val.string_ref = ref;
+    return obj;
 }
 
 KS_API Ks_Script_Userdata ks_script_create_userdata(Ks_Script_Ctx ctx, ks_size size)
@@ -1744,7 +1746,7 @@ KS_API ks_str ks_script_obj_to_string(Ks_Script_Ctx ctx, Ks_Script_Object obj)
                 KS_TAG_GARBAGE,
                 "ObjToStringCopy"
             );
-            std::memcpy((void*)copy, str, len);
+            memcpy((void*)copy, str, len);
             return copy;
         }
     }
@@ -1758,7 +1760,7 @@ KS_API ks_str ks_script_obj_to_string(Ks_Script_Ctx ctx, Ks_Script_Object obj)
             KS_TAG_GARBAGE,
             "ObjToStringCopy"
         );
-        std::memcpy((void*)copy, str, len);
+        memcpy((void*)copy, str, len);
         return copy;
     }
 

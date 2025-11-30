@@ -13,6 +13,8 @@ extern "C" {
 #include <string>
 #include <vector>
 #include <map>
+#include <algorithm>
+#include <string.h>
 #include "../memory/memory.h"
 #include "../core/log.h"
 
