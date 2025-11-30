@@ -58,20 +58,32 @@ include("./KeyStoneCLI/premake5.lua")
 include("./KeyStoneTests/premake5.lua")
 
 newaction {
-        trigger = "clean",
-        description = "Remove all build files.",
-        execute = function()
-            print("Cleaning build directory...")
-            os.rmdir("build")
-            os.rmdir("bin") 
-            os.rmdir("bin-int")
-            
-            if os.target() == "windows" then
-                os.execute("del /s /q *.sln *.vcxproj *.vcxproj.user *.vcxproj.filters 2>nul")
-            else
-                os.execute("find . -name 'Makefile' -delete")
-                os.execute("find . -name '*.make' -delete")
-            end
-            print("Done.")
+    trigger = "clean",
+    description = "Remove all build files.",
+    execute = function()
+        print("Cleaning build directory...")
+        os.rmdir("build")
+        os.rmdir("bin") 
+        os.rmdir("bin-int")
+        
+        if os.target() == "windows" then
+            os.execute("del /s /q *.sln *.vcxproj *.vcxproj.user *.vcxproj.filters 2>nul")
+        else
+            os.execute("find . -name 'Makefile' -delete")
+            os.execute("find . -name '*.make' -delete")
         end
-    }
+        print("Done.")
+    end
+}
+
+newaction {
+    trigger = "docs",
+    description = "Generate documentation using Doxygen",
+    execute = function()
+        if os.target() == "windows" then
+            os.execute("doxygen Doxyfile")
+        else
+            os.execute("doxygen Doxyfile")
+        end
+    end
+}

@@ -14,5 +14,8 @@ build/
 
 old/
 
+docs/
+*.doxyfile.bak
+
 ./KeyStoneEngine/KeyStoneCLI/engine.cpp
 ./KeyStoneEngine/KeyStoneCLI/engine.h
