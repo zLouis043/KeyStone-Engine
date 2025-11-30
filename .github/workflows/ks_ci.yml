@@ -19,7 +19,6 @@ jobs:
           # --- WINDOWS CONFIG ---
           - os: windows-latest
             platform: windows
-            # Setup.bat DEVE essere eseguito dalla sua directory
             setup_cmd: cd Scripts && .\setup.bat
             premake_action: vs2022
             build_cmd: msbuild KeyStone-Engine.sln /p:Configuration=Debug /p:Platform=x64 /m
@@ -47,7 +46,6 @@ jobs:
       with:
         submodules: recursive
 
-    # --- INSTALLAZIONE MANUALE PREMAKE5 ---
     - name: Install Premake (Windows)
       if: matrix.platform == 'windows'
       run: |
@@ -66,7 +64,6 @@ jobs:
       if: matrix.platform == 'macos'
       run: brew install premake
 
-    # --- SETUP COMPILATORE ---
     - name: Setup MSVC (Windows)
       if: matrix.platform == 'windows'
       uses: ilammy/msvc-dev-cmd@v1
@@ -77,9 +74,22 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y build-essential libreadline-dev
 
-    # --- CACHE VCPKG ---
     - name: Cache Vcpkg
       uses: actions/cache@v3
       with:
         path: vendor/vcpkg/installed
         key: ${{ runner.os }}-vcpkg-${{ hashFiles('Scripts/setup.bat', 'Scripts/setup.sh') }}
+
+    - name: Install Dependencies
+      run: ${{ matrix.setup_cmd }}
+
+    - name: Generate Build Files
+      working-directory: ./KeyStoneEngine
+      run: premake5 ${{ matrix.premake_action }}
+
+    - name: Build Project
+      working-directory: ./KeyStoneEngine
+      run: ${{ matrix.build_cmd }}
+      
+    - name: Execute Tests
+      run: ${{ matrix.test_bin }} -s -d
