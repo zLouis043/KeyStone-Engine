@@ -319,7 +319,7 @@ namespace script {
 namespace asset {
     using handle = uint32_t;
 
-    constexpr uint32_t invalid_handle = KS_INVALID_ASSET_HANDLE;
+    constexpr uint32_t invalid_handle = KS_INVALID_HANDLE;
     constexpr Ks_AssetData invalid_data = KS_INVALID_ASSET_DATA;
 
     template <typename Derived>
@@ -410,7 +410,7 @@ namespace asset {
 
             std::string type_name = found->second;
 
-            Ks_AssetHandle asset_handle = ks_assets_manager_load_asset_from_file(
+            Ks_Handle asset_handle = ks_assets_manager_load_asset_from_file(
                 am, type_name.c_str(), asset_name.c_str(), file_path.c_str()
             );
 
@@ -426,7 +426,7 @@ namespace asset {
 
             std::string type_name = found->second;
 
-            Ks_AssetHandle asset_handle = ks_assets_manager_load_asset_from_data(
+            Ks_Handle asset_handle = ks_assets_manager_load_asset_from_data(
                 am, type_name.c_str(), asset_name.c_str(), data
             );
 
