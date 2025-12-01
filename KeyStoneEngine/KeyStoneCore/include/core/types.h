@@ -21,6 +21,7 @@ typedef void *ks_ptr;   ///< Generic pointer type (void*).
 
 typedef uint8_t ks_bool; ///< Boolean type (0 = false, non-zero = true).
 typedef uint8_t ks_byte; ///< Byte type (unsigned 8-bit).
+typedef char ks_char;
 typedef short ks_short;
 typedef int ks_int;
 typedef long ks_long;
@@ -47,3 +48,40 @@ typedef double ks_float64;
 
 /** @brief Platform-independent definition for variable argument lists. */
 typedef va_list ks_va_list;
+
+typedef enum Ks_Type Ks_Type;
+enum Ks_Type {
+	KS_TYPE_BOOL,
+	KS_TYPE_CHAR,
+	KS_TYPE_INT,
+	KS_TYPE_INT8,
+	KS_TYPE_INT16,
+	KS_TYPE_INT32,
+	KS_TYPE_INT64,
+	KS_TYPE_UINT,
+	KS_TYPE_UINT8,
+	KS_TYPE_UINT16,
+	KS_TYPE_UINT32,
+	KS_TYPE_UINT64,
+	KS_TYPE_FLOAT,
+	KS_TYPE_DOUBLE,
+	KS_TYPE_FLOAT32,
+	KS_TYPE_FLOAT64,
+	KS_TYPE_CSTRING,
+	KS_TYPE_LSTRING,
+	KS_TYPE_PTR,
+	KS_TYPE_USERDATA,
+	KS_TYPE_SCRIPT_TABLE
+};
+
+typedef struct ks_lstr ks_lstr;
+struct ks_lstr {
+	ks_str data;
+	ks_size len;
+};
+
+typedef struct ks_userdata ks_userdata;
+struct ks_userdata {
+	ks_ptr data;
+	ks_size size;
+};
