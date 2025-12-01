@@ -12,16 +12,10 @@
 #include <stdint.h>
 
 /**
- * @brief A unique handle identifying a loaded asset.
- */
-typedef ks_uint32 Ks_AssetHandle;
-
-/**
  * @brief Generic pointer to asset data.
  */
 typedef ks_ptr Ks_AssetData;
 
-#define KS_INVALID_ASSET_HANDLE 0
 #define KS_INVALID_ASSET_DATA ((void *)0)
 
 /**

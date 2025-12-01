@@ -9,6 +9,7 @@
 #pragma once
 
 #include "asset.h"
+#include "../core/handle.h"
 
 /**
  * @brief Opaque pointer to the internal implementation of the Assets Manager.
@@ -54,9 +55,9 @@ KS_API ks_no_ret ks_assets_manager_register_asset_type(Ks_AssetsManager am,
  * @param type_name The type of the asset (must be registered).
  * @param asset_name A unique name to identify this specific asset instance.
  * @param file_path Path to the file on disk.
- * @return Handle to the loaded asset, or KS_INVALID_ASSET_HANDLE on failure.
+ * @return Handle to the loaded asset, or KS_INVALID_HANDLE on failure.
  */
-KS_API Ks_AssetHandle ks_assets_manager_load_asset_from_file(
+KS_API Ks_Handle ks_assets_manager_load_asset_from_file(
     Ks_AssetsManager am, ks_str type_name, ks_str asset_name,
     ks_str file_path);
 
@@ -67,9 +68,9 @@ KS_API Ks_AssetHandle ks_assets_manager_load_asset_from_file(
  * @param type_name The type of the asset.
  * @param asset_name A unique name to identify this specific asset instance.
  * @param data Pointer to the raw data.
- * @return Handle to the loaded asset, or KS_INVALID_ASSET_HANDLE on failure.
+ * @return Handle to the loaded asset, or KS_INVALID_HANDLE on failure.
  */
-KS_API Ks_AssetHandle ks_assets_manager_load_asset_from_data(
+KS_API Ks_Handle ks_assets_manager_load_asset_from_data(
     Ks_AssetsManager am, ks_str type_name, ks_str asset_name,
     const ks_byte  *data);
 
@@ -79,9 +80,9 @@ KS_API Ks_AssetHandle ks_assets_manager_load_asset_from_data(
  *
  * @param am The Assets Manager.
  * @param asset_name The name of the asset to find.
- * @return Handle to the asset, or KS_INVALID_ASSET_HANDLE if not found.
+ * @return Handle to the asset, or KS_INVALID_HANDLE if not found.
  */
-KS_API Ks_AssetHandle ks_assets_manager_get_asset(Ks_AssetsManager am,
+KS_API Ks_Handle ks_assets_manager_get_asset(Ks_AssetsManager am,
     ks_str asset_name);
 
 /**
@@ -92,7 +93,7 @@ KS_API Ks_AssetHandle ks_assets_manager_get_asset(Ks_AssetsManager am,
  * @return Pointer to the asset data structure.
  */
 KS_API Ks_AssetData ks_assets_manager_get_data(Ks_AssetsManager am,
-                                               Ks_AssetHandle handle);
+    Ks_Handle handle);
 
 /**
  * @brief Gets the registered type name of the asset (e.g. "Texture", "Sound").
@@ -100,7 +101,7 @@ KS_API Ks_AssetData ks_assets_manager_get_data(Ks_AssetsManager am,
  * @param handle The asset handle.
  * @return The type name string, or NULL if invalid.
  */
-KS_API ks_str ks_assets_manager_get_type_name(Ks_AssetsManager am, Ks_AssetHandle handle);
+KS_API ks_str ks_assets_manager_get_type_name(Ks_AssetsManager am, Ks_Handle handle);
 
 /**
  * @brief Gets the current reference count of an asset.
@@ -110,7 +111,7 @@ KS_API ks_str ks_assets_manager_get_type_name(Ks_AssetsManager am, Ks_AssetHandl
  * @return The number of references to the asset.
  */
 KS_API uint32_t ks_assets_manager_get_ref_count(Ks_AssetsManager am,
-                                                Ks_AssetHandle handle);
+    Ks_Handle handle);
 
 /**
  * @brief Releases a reference to an asset.
@@ -121,7 +122,7 @@ KS_API uint32_t ks_assets_manager_get_ref_count(Ks_AssetsManager am,
  * @param handle The asset handle to release.
  */
 KS_API ks_no_ret ks_assets_manager_asset_release(Ks_AssetsManager am,
-                                            Ks_AssetHandle handle);
+    Ks_Handle handle);
 
 /**
  * @brief Checks if an asset handle is currently valid within the manager.
@@ -131,6 +132,6 @@ KS_API ks_no_ret ks_assets_manager_asset_release(Ks_AssetsManager am,
  * @return ks_true if valid, ks_false otherwise.
  */
 KS_API ks_bool ks_assets_is_handle_valid(Ks_AssetsManager am,
-                                      Ks_AssetHandle handle);
+    Ks_Handle handle);
 
 /** @} */
