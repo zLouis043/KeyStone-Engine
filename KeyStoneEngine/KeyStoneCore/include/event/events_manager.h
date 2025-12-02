@@ -3,6 +3,10 @@
 #include "event.h"
 
 #ifdef __cplusplus
+#include <initializer_list>
+#endif
+
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -12,7 +16,6 @@ KS_API Ks_EventManager ks_event_manager_create();
 KS_API ks_no_ret ks_event_manager_destroy(Ks_EventManager em);
 
 #ifdef __cplusplus
-#include <initializer_list>
 #define ks_event_manager_register(em, name, ...) \
     ks_event_manager_register_impl(em, name, \
     std::initializer_list<Ks_Type>{__VA_ARGS__}.begin(), \
