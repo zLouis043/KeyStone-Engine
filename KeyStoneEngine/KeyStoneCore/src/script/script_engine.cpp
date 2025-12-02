@@ -707,6 +707,27 @@ KS_API ks_ptr ks_script_userdata_get_ptr(Ks_Script_Ctx ctx, Ks_Script_Userdata u
     return ptr;
 }
 
+ks_size ks_script_userdata_get_size(Ks_Script_Ctx ctx, Ks_Script_Userdata ud)
+{
+    if (!ctx || ud.type != KS_SCRIPT_OBJECT_TYPE_USERDATA) return 0;
+
+    auto* sctx = static_cast<KsScriptEngineCtx*>(ctx);
+    lua_State* L = sctx->get_raw_state();
+
+    sctx->get_from_registry(ud.val.userdata_ref);
+
+    if (!lua_isuserdata(L, -1)) {
+        lua_pop(L, 1);
+        return 0;
+    }
+
+    ks_size size = lua_rawlen(L, -1);
+
+    lua_pop(L, 1);
+
+    return size;
+}
+
 KS_API ks_no_ret ks_script_set_type_name(Ks_Script_Ctx ctx, Ks_Script_Object obj, ks_str type_name)
 {
     if (!ctx || !type_name) return;

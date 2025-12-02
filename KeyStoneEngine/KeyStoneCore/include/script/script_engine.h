@@ -47,8 +47,8 @@ typedef ks_no_ret (*ks_script_deallocator)(ks_ptr data, ks_size size);
  * @brief State of a script object handle.
  */
 typedef enum {
-  KS_SCRIPT_OBJECT_VALID,     ///< The object is valid and holds a reference.
   KS_SCRIPT_OBJECT_INVALID,   ///< The object is invalid or null.
+  KS_SCRIPT_OBJECT_VALID,     ///< The object is valid and holds a reference.
   KS_SCRIPT_OBJECT_MOVED,     ///< The object ownership has been moved.
   KS_SCRIPT_OBJECT_DESTROYED  ///< The object has been destroyed.
 } Ks_Script_Object_State;
@@ -474,6 +474,7 @@ KS_API Ks_Script_LightUserdata ks_script_create_lightuserdata(Ks_Script_Ctx ctx,
 KS_API ks_ptr ks_script_lightuserdata_get_ptr(Ks_Script_Ctx ctx, Ks_Script_LightUserdata lud);
 
 KS_API ks_ptr ks_script_userdata_get_ptr(Ks_Script_Ctx ctx, Ks_Script_Userdata ud);
+KS_API ks_size ks_script_userdata_get_size(Ks_Script_Ctx ctx, Ks_Script_Userdata ud);
 
 KS_API ks_no_ret ks_script_set_type_name(Ks_Script_Ctx ctx, Ks_Script_Object obj, ks_str type_name);
 KS_API ks_ptr ks_script_get_self(Ks_Script_Ctx ctx);

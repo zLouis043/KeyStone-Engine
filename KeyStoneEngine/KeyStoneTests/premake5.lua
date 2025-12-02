@@ -27,7 +27,7 @@ project "KeyStoneTests"
       "KeyStoneCore"
    }
 
-   debugargs { "-s -d" }
+   debugargs { "-d" }
    
    filter "system:windows"
       buildoptions { "/utf-8", "/Zc:preprocessor" }

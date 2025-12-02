@@ -49,39 +49,31 @@ typedef double ks_float64;
 /** @brief Platform-independent definition for variable argument lists. */
 typedef va_list ks_va_list;
 
-typedef enum Ks_Type Ks_Type;
-enum Ks_Type {
+typedef enum Ks_Type {
+	KS_TYPE_UNKNOWN,
 	KS_TYPE_BOOL,
 	KS_TYPE_CHAR,
 	KS_TYPE_INT,
-	KS_TYPE_INT8,
-	KS_TYPE_INT16,
-	KS_TYPE_INT32,
-	KS_TYPE_INT64,
 	KS_TYPE_UINT,
-	KS_TYPE_UINT8,
-	KS_TYPE_UINT16,
-	KS_TYPE_UINT32,
-	KS_TYPE_UINT64,
 	KS_TYPE_FLOAT,
 	KS_TYPE_DOUBLE,
-	KS_TYPE_FLOAT32,
-	KS_TYPE_FLOAT64,
 	KS_TYPE_CSTRING,
 	KS_TYPE_LSTRING,
 	KS_TYPE_PTR,
 	KS_TYPE_USERDATA,
 	KS_TYPE_SCRIPT_TABLE
-};
+} Ks_Type;
 
-typedef struct ks_lstr ks_lstr;
-struct ks_lstr {
+typedef struct Ks_LStr {
 	ks_str data;
 	ks_size len;
-};
+} Ks_LStr;
 
-typedef struct ks_userdata ks_userdata;
-struct ks_userdata {
+typedef struct Ks_UserData {
 	ks_ptr data;
 	ks_size size;
-};
+} Ks_UserData;
+
+#define KS_LSTR(str, len) Ks_LStr { str, len }
+#define KS_USERDATA(data) Ks_UserData { &data, sizeof(data) }
+
