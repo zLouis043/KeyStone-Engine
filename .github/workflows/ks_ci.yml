@@ -92,4 +92,4 @@ jobs:
       run: ${{ matrix.build_cmd }}
       
     - name: Execute Tests
-      run: ${{ matrix.test_bin }} -s -d
+      run: ${{ matrix.test_bin }}
