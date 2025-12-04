@@ -183,6 +183,13 @@ struct PropertyInfo {
 	ks_script_cfunc setter;
 };
 
+struct FieldInfo {
+	std::string name;
+	Ks_Type type;
+	ks_size offset;
+	std::string type_name;
+};
+
 struct KsUsertypeBuilder {
 	Ks_Script_Ctx ctx;
 	std::string type_name;
@@ -196,6 +203,7 @@ struct KsUsertypeBuilder {
 	std::map<std::string, std::vector<MethodInfo>> methods;
 	std::map<std::string, std::vector<MethodInfo>> static_methods;
 	std::vector<PropertyInfo> properties;
+	std::vector<FieldInfo> fields;
 	std::map<Ks_Script_Metamethod, ks_script_cfunc> metamethods;
 
 	KsUsertypeBuilder(Ks_Script_Ctx c, const char* name, size_t instance_size) : 

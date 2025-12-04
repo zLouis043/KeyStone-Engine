@@ -52,6 +52,8 @@ static int usertype_auto_constructor_thunk(lua_State* L);
 static int overload_dispatcher_thunk(lua_State* L);
 static int generic_cfunc_thunk(lua_State* L);
 static int instance_method_thunk(lua_State* L);
+static int usertype_field_getter_thunk(lua_State* L);
+static int usertype_field_setter_thunk(lua_State* L);
 static void push_overload_dispatcher(lua_State* L, const std::vector<MethodInfo>& overloads, DispatchMode mode, ks_size instance_size = 0, const char* type_name = nullptr, ks_size n_user_upvalues = 0);
 static bool check_signature_match(lua_State* L, int sig_tbl_idx, int start_idx, int args_to_check);
 static void register_methods_to_table(lua_State* L, int table_idx, const std::map<std::string, std::vector<MethodInfo>>& methods_map, DispatchMode mode);
@@ -838,7 +840,16 @@ ks_no_ret ks_script_usertype_add_static_overload(Ks_Script_Userytype_Builder bui
     }
 }
 
-KS_API ks_no_ret ks_script_usertype_add_property(Ks_Script_Userytype_Builder builder, ks_str name, ks_script_cfunc getter, ks_script_cfunc setter)
+KS_API
+ks_no_ret ks_script_usertype_add_field(Ks_Script_Userytype_Builder builder, ks_str name, Ks_Type type, ks_size offset, ks_str type_alias)
+{
+    auto* b = static_cast<KsUsertypeBuilder*>(builder);
+    if (b && name) {
+        std::string tname = (type_alias) ? type_alias : "";
+        b->fields.push_back({ name, type, offset, tname });
+    }
+}
+ks_no_ret ks_script_usertype_add_property(Ks_Script_Userytype_Builder builder, ks_str name, ks_script_cfunc getter, ks_script_cfunc setter)
 {
     auto* b = static_cast<KsUsertypeBuilder*>(builder);
     if (b && name) b->properties.push_back({ name, getter, setter });
@@ -907,6 +918,22 @@ KS_API ks_no_ret ks_script_usertype_end(Ks_Script_Userytype_Builder builder)
             lua_pushcclosure(L, instance_method_thunk, 1);
             lua_settable(L, setters_tbl_idx);
         }
+    }
+
+    for (auto& field : b->fields) {
+        lua_pushstring(L, field.name.c_str());
+        lua_pushinteger(L, field.offset);
+        lua_pushinteger(L, field.type); 
+        lua_pushstring(L, field.type_name.c_str());
+        lua_pushcclosure(L, usertype_field_getter_thunk, 3);
+        lua_settable(L, getters_tbl_idx);
+
+        lua_pushstring(L, field.name.c_str());
+        lua_pushinteger(L, field.offset);
+        lua_pushinteger(L, field.type);
+        lua_pushstring(L, field.type_name.c_str());
+        lua_pushcclosure(L, usertype_field_setter_thunk, 3);
+        lua_settable(L, setters_tbl_idx);
     }
 
     lua_pushstring(L, "__index");
@@ -2522,4 +2549,71 @@ static void save_usertype_table(lua_State* L, int table_idx, const std::string& 
     lua_pushvalue(L, table_idx);
     std::string key = type_name + table_suffix;
     lua_setfield(L, LUA_REGISTRYINDEX, key.c_str());
+}
+
+static int usertype_field_getter_thunk(lua_State* L) {
+    auto* handle = static_cast<KsUsertypeInstanceHandle*>(lua_touserdata(L, 1));
+    if (!handle || !handle->instance) return 0;
+
+    ks_size offset = (ks_size)lua_tointeger(L, lua_upvalueindex(1));
+    Ks_Type type = (Ks_Type)lua_tointeger(L, lua_upvalueindex(2));
+
+    ks_byte* field_ptr = static_cast<ks_byte*>(handle->instance) + offset;
+
+    switch (type) {
+    case KS_TYPE_INT:     lua_pushinteger(L, *reinterpret_cast<ks_int*>(field_ptr)); break;
+    case KS_TYPE_FLOAT:   lua_pushnumber(L, *reinterpret_cast<ks_float*>(field_ptr)); break;
+    case KS_TYPE_DOUBLE:  lua_pushnumber(L, *reinterpret_cast<ks_double*>(field_ptr)); break;
+    case KS_TYPE_BOOL:    lua_pushboolean(L, *reinterpret_cast<ks_bool*>(field_ptr)); break;
+    case KS_TYPE_CSTRING: lua_pushstring(L, *reinterpret_cast<const char**>(field_ptr)); break; 
+
+    case KS_TYPE_USERDATA: {
+        const char* type_name = lua_tostring(L, lua_upvalueindex(3));
+
+        auto* sub_handle = static_cast<KsUsertypeInstanceHandle*>(
+            lua_newuserdatauv(L, sizeof(KsUsertypeInstanceHandle), 0)
+            );
+
+        sub_handle->instance = field_ptr;
+        sub_handle->is_borrowed = true; 
+
+        luaL_setmetatable(L, type_name);
+        break;
+    }
+    default: lua_pushnil(L); break;
+    }
+    return 1;
+}
+
+static int usertype_field_setter_thunk(lua_State* L) {
+    auto* handle = static_cast<KsUsertypeInstanceHandle*>(lua_touserdata(L, 1));
+    if (!handle || !handle->instance) return luaL_error(L, "Invalid instance");
+
+    ks_size offset = (ks_size)lua_tointeger(L, lua_upvalueindex(1));
+    Ks_Type type = (Ks_Type)lua_tointeger(L, lua_upvalueindex(2));
+    ks_byte* dst_ptr = static_cast<ks_byte*>(handle->instance) + offset;
+
+    switch (type) {
+    case KS_TYPE_INT:     *reinterpret_cast<ks_int*>(dst_ptr) = (ks_int)lua_tointeger(L, 2); break;
+    case KS_TYPE_FLOAT:   *reinterpret_cast<ks_float*>(dst_ptr) = (ks_float)lua_tonumber(L, 2); break;
+    case KS_TYPE_DOUBLE:  *reinterpret_cast<ks_double*>(dst_ptr) = (ks_double)lua_tonumber(L, 2); break;
+    case KS_TYPE_BOOL:    *reinterpret_cast<ks_bool*>(dst_ptr) = (ks_bool)lua_toboolean(L, 2); break;
+
+    case KS_TYPE_USERDATA: {
+        const char* expected_type = lua_tostring(L, lua_upvalueindex(3));
+
+        void* src_raw = luaL_checkudata(L, 2, expected_type);
+        auto* src_handle = static_cast<KsUsertypeInstanceHandle*>(src_raw);
+
+        if (!src_handle || !src_handle->instance) {
+            return luaL_error(L, "Assignment source is null or invalid");
+        }
+
+        size_t size_to_copy = lua_rawlen(L, 2) - sizeof(KsUsertypeInstanceHandle);
+        memcpy(dst_ptr, src_handle->instance, size_to_copy);
+        break;
+    }
+    default: return luaL_error(L, "Unsupported field type for assignment");
+    }
+    return 0;
 }

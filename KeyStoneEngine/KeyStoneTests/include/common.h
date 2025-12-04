@@ -133,3 +133,27 @@ inline ks_returns_count hero_attack_strong(Ks_Script_Ctx ctx) {
     ks_script_stack_push_obj(ctx, ks_script_create_number(ctx, dmg));
     return 1;
 }
+
+struct Vec3 {
+    float x, y, z;
+};
+
+struct Transform {
+    Vec3 position;
+    Vec3 scale;
+    int id;
+};
+
+inline ks_returns_count vec3_new(Ks_Script_Ctx ctx) {
+    Vec3* self = (Vec3*)ks_script_get_self(ctx);
+    self->x = 0; self->y = 0; self->z = 0;
+    return 0;
+}
+
+inline ks_returns_count transform_new(Ks_Script_Ctx ctx) {
+    Transform* self = (Transform*)ks_script_get_self(ctx);
+    self->id = 0;
+    self->position = { 0, 0, 0 };
+    self->scale = { 1, 1, 1 };
+    return 0;
+}

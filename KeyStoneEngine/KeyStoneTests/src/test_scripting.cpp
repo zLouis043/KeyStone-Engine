@@ -282,6 +282,60 @@ TEST_CASE("C API: Script Engine Suite") {
         ks_script_end_scope(ctx);
     }
 
+    SUBCASE("Usertypes: Fields (Direct Access) & Nested Types") {
+        ks_script_begin_scope(ctx); {
+            auto b_vec = ks_script_usertype_begin(ctx, "Vec3", sizeof(Vec3));
+            ks_script_usertype_add_constructor(b_vec, vec3_new);
+
+            ks_script_usertype_add_field(b_vec, "x", KS_TYPE_FLOAT, offsetof(Vec3, x), nullptr);
+            ks_script_usertype_add_field(b_vec, "y", KS_TYPE_FLOAT, offsetof(Vec3, y), nullptr);
+            ks_script_usertype_add_field(b_vec, "z", KS_TYPE_FLOAT, offsetof(Vec3, z), nullptr);
+            ks_script_usertype_end(b_vec);
+
+            auto b_trans = ks_script_usertype_begin(ctx, "Transform", sizeof(Transform));
+            ks_script_usertype_add_constructor(b_trans, transform_new);
+
+            ks_script_usertype_add_field(b_trans, "id", KS_TYPE_INT, offsetof(Transform, id), nullptr);
+
+            ks_script_usertype_add_field(b_trans, "position", KS_TYPE_USERDATA, offsetof(Transform, position), "Vec3");
+            ks_script_usertype_add_field(b_trans, "scale", KS_TYPE_USERDATA, offsetof(Transform, scale), "Vec3");
+
+            ks_script_usertype_end(b_trans);
+
+            const char* script = R"(
+                local t = Transform()
+                
+                t.id = 99
+                
+                t.position.x = 10.5
+                t.position.y = -5.0
+                t.position.z = 33.0
+
+                local new_scale = Vec3()
+                new_scale.x = 2.0
+                new_scale.y = 2.0
+                new_scale.z = 2.0
+                
+                t.scale = new_scale 
+
+                return t.id, t.position.x, t.scale.y
+            )";
+
+            Ks_Script_Function_Call_Result res = ks_script_do_string(ctx, script);
+
+            if (!ks_script_call_succeded(ctx, res)) {
+                FAIL(ks_script_get_last_error_str(ctx));
+            }
+
+            CHECK(ks_script_call_get_returns_count(ctx, res) == 3);
+            CHECK(ks_script_obj_as_number(ctx, ks_script_call_get_return_at(ctx, res, 1)) == 99.0);
+            CHECK(ks_script_obj_as_number(ctx, ks_script_call_get_return_at(ctx, res, 2)) == 10.5);
+            CHECK(ks_script_obj_as_number(ctx, ks_script_call_get_return_at(ctx, res, 3)) == 2.0);
+
+        }
+        ks_script_end_scope(ctx);
+    }
+
     SUBCASE("Usertypes: Inheritance & Overloading") {
         ks_script_begin_scope(ctx); {
             const char* T_ENT = "TestEntity";
