@@ -59,6 +59,7 @@ static bool check_signature_match(lua_State* L, int sig_tbl_idx, int start_idx, 
 static void register_methods_to_table(lua_State* L, int table_idx, const std::map<std::string, std::vector<MethodInfo>>& methods_map, DispatchMode mode);
 static void chain_usertype_tables(lua_State* L, int child_idx, const std::string& base_name, const char* table_suffix);
 static void save_usertype_table(lua_State* L, int table_idx, const std::string& type_name, const char* table_suffix);
+static std::vector<MethodInfo> convert_sigs(const Ks_Script_Sig_Def* sigs, size_t count, const char* name = "");
 
 static int ks_script_error_handler(lua_State* L);
 
@@ -161,15 +162,21 @@ KS_API Ks_Script_Object ks_script_create_invalid_obj(Ks_Script_Ctx ctx)
     return obj;
 }
 
-KS_API Ks_Script_Function ks_script_create_cfunc(Ks_Script_Ctx ctx, ks_script_cfunc f)
+KS_API Ks_Script_Function ks_script_create_cfunc(Ks_Script_Ctx ctx, const Ks_Script_Sig_Def* sigs, ks_size count)
 {
-    if (!ctx || !f) return ks_script_create_invalid_obj(ctx);
+    if (!ctx || !sigs || count == 0) return ks_script_create_invalid_obj(ctx);
 
     KsScriptEngineCtx* sctx = static_cast<KsScriptEngineCtx*>(ctx);
     lua_State* L = sctx->get_raw_state();
 
-    lua_pushlightuserdata(L, (void*)f);
-    lua_pushcclosure(L, generic_cfunc_thunk, 1);
+    if (count == 1 && sigs[0].num_args == 0 && sigs[0].args == nullptr) {
+        lua_pushlightuserdata(L, (void*)sigs[0].func);
+        lua_pushcclosure(L, generic_cfunc_thunk, 1);
+    }
+    else {
+        std::vector<MethodInfo> infos = convert_sigs(sigs, count);
+        push_overload_dispatcher(L, infos, DISPATCH_NORMAL);
+    }
 
     Ks_Script_Function obj;
     obj.type = KS_SCRIPT_OBJECT_TYPE_FUNCTION;
@@ -204,22 +211,22 @@ Ks_Script_Function ks_script_create_overloaded_cfunc(Ks_Script_Ctx ctx, Ks_Scrip
     return func;
 }
 
-KS_API Ks_Script_Function ks_script_create_cfunc_with_upvalues(Ks_Script_Ctx ctx, ks_script_cfunc f, ks_size n_upvalues)
+KS_API Ks_Script_Function ks_script_create_cfunc_with_upvalues(Ks_Script_Ctx ctx, const Ks_Script_Sig_Def* sigs, ks_size count, ks_size n_upvalues)
 {
-    if (!ctx || !f) return ks_script_create_invalid_obj(ctx);
+    if (!ctx || !sigs || count == 0) return ks_script_create_invalid_obj(ctx);
 
     KsScriptEngineCtx* sctx = static_cast<KsScriptEngineCtx*>(ctx);
     lua_State* L = sctx->get_raw_state();
 
-    lua_pushlightuserdata(L, (void*)f);
-
-    if (n_upvalues > 0) {
-        lua_insert(L, -(int)(n_upvalues + 1));
+    if (count == 1 && sigs[0].num_args == 0 && sigs[0].args == nullptr) {
+        lua_pushlightuserdata(L, (void*)sigs[0].func);
+        if (n_upvalues > 0) lua_insert(L, -(int)(n_upvalues + 1));
+        lua_pushcclosure(L, generic_cfunc_thunk, (int)n_upvalues + 1);
     }
-
-    int total_upvalues = n_upvalues + 1;
-
-    lua_pushcclosure(L, generic_cfunc_thunk, total_upvalues);
+    else {
+        std::vector<MethodInfo> infos = convert_sigs(sigs, count);
+        push_overload_dispatcher(L, infos, DISPATCH_NORMAL, 0, nullptr, n_upvalues);
+    }
 
     Ks_Script_Function obj;
     obj.type = KS_SCRIPT_OBJECT_TYPE_FUNCTION;
@@ -785,10 +792,14 @@ KS_API ks_no_ret ks_script_usertype_inherits_from(Ks_Script_Userytype_Builder bu
     if (b && base_type_name) b->base_type_name = base_type_name;
 }
 
-KS_API ks_no_ret ks_script_usertype_add_constructor(Ks_Script_Userytype_Builder builder, ks_script_cfunc ctor)
+KS_API ks_no_ret ks_script_usertype_add_constructor(Ks_Script_Userytype_Builder builder, const Ks_Script_Sig_Def* sigs, ks_size count)
 {
     auto* b = static_cast<KsUsertypeBuilder*>(builder);
-    if (b) b->constructors.push_back({ "ctor", ctor, {} });
+    if (!b || !sigs || count == 0) return;
+
+    std::vector<MethodInfo> infos = convert_sigs(sigs, count, "ctor");
+    auto& ctor_vec = b->constructors;
+    ctor_vec.insert(ctor_vec.end(), infos.begin(), infos.end());
 }
 
 ks_no_ret ks_script_usertype_add_constructor_overload(Ks_Script_Userytype_Builder builder, ks_script_cfunc ctor, Ks_Script_Object_Type* args, ks_size num_args)
@@ -807,10 +818,14 @@ KS_API ks_no_ret ks_script_usertype_set_destructor(Ks_Script_Userytype_Builder b
     if (b) b->destructor = dtor;
 }
 
-KS_API ks_no_ret ks_script_usertype_add_method(Ks_Script_Userytype_Builder builder, ks_str name, ks_script_cfunc func)
+KS_API ks_no_ret ks_script_usertype_add_method(Ks_Script_Userytype_Builder builder, ks_str name, const Ks_Script_Sig_Def* sigs, ks_size count)
 {
     auto* b = static_cast<KsUsertypeBuilder*>(builder);
-    if (b && name && func) b->methods[name].push_back({ name, func, {} });
+    if (!b || !name || !sigs || count == 0) return;
+
+    std::vector<MethodInfo> infos = convert_sigs(sigs, count, name);
+    auto& method_vec = b->methods[name];
+    method_vec.insert(method_vec.end(), infos.begin(), infos.end());
 }
 
 KS_API ks_no_ret ks_script_usertype_add_overload(Ks_Script_Userytype_Builder builder, ks_str name, ks_script_cfunc func, Ks_Script_Object_Type* args, ks_size num_args) {
@@ -824,10 +839,14 @@ KS_API ks_no_ret ks_script_usertype_add_overload(Ks_Script_Userytype_Builder bui
     }
 }
 
-KS_API ks_no_ret ks_script_usertype_add_static_method(Ks_Script_Userytype_Builder builder, ks_str name, ks_script_cfunc func)
+KS_API ks_no_ret ks_script_usertype_add_static_method(Ks_Script_Userytype_Builder builder, ks_str name, const Ks_Script_Sig_Def* sigs, ks_size count)
 {
     auto* b = static_cast<KsUsertypeBuilder*>(builder);
-    if (b && name && func) b->static_methods[name].push_back({ name, func, {} });
+    if (!b || !name || !sigs || count == 0) return;
+
+    std::vector<MethodInfo> infos = convert_sigs(sigs, count, name);
+    auto& method_vec = b->static_methods[name];
+    method_vec.insert(method_vec.end(), infos.begin(), infos.end());
 }
 
 ks_no_ret ks_script_usertype_add_static_overload(Ks_Script_Userytype_Builder builder, ks_str name, ks_script_cfunc func, Ks_Script_Object_Type* args, ks_size num_args)
@@ -2216,8 +2235,6 @@ KS_API ks_no_ret ks_script_func_call(Ks_Script_Ctx ctx, Ks_Script_Function f, ks
 
     sctx->get_from_registry(f.val.function_ref);
     lua_insert(L, -(int)n_args - 1);
-
-    //ks_script_stack_insert(ctx, -(n_args + 1));
     
     if (lua_pcall(L, n_args, n_rets, err_func_idx) != LUA_OK) {
         ks_str err = lua_tostring(L, -1);
@@ -2616,4 +2633,17 @@ static int usertype_field_setter_thunk(lua_State* L) {
     default: return luaL_error(L, "Unsupported field type for assignment");
     }
     return 0;
+}
+
+static std::vector<MethodInfo> convert_sigs(const Ks_Script_Sig_Def* sigs, size_t count, const char* name) {
+    std::vector<MethodInfo> infos;
+    infos.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+        std::vector<Ks_Script_Object_Type> signature;
+        if (sigs[i].args && sigs[i].num_args > 0) {
+            signature.assign(sigs[i].args, sigs[i].args + sigs[i].num_args);
+        }
+        infos.push_back({ name, sigs[i].func, signature });
+    }
+    return infos;
 }

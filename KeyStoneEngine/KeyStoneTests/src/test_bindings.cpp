@@ -53,7 +53,7 @@ TEST_CASE("Managers-Lua bindings Tests") {
 
     ks_event_manager_lua_bind(em, ctx);
 
-    ks_script_set_global(ctx, "test_set_received", ks_script_create_cfunc(ctx, test_set_received));
+    ks_script_set_global(ctx, "test_set_received", ks_script_create_cfunc(ctx, KS_SCRIPT_FUNC_VOID(test_set_received)));
 
 	SUBCASE("Assets Manager Lua Bindings") {
 		Ks_IAsset interface;
@@ -63,7 +63,7 @@ TEST_CASE("Managers-Lua bindings Tests") {
         ks_assets_manager_register_asset_type(am, "MyAsset", interface);
 
         auto b = ks_script_usertype_begin(ctx, "MyAsset", sizeof(MyCAsset));
-        ks_script_usertype_add_property(b, "id", my_asset_get_id, nullptr);
+        ks_script_usertype_add_field(b, "id", KS_TYPE_INT, offsetof(MyCAsset, id), nullptr);
         ks_script_usertype_end(b);
 
         const char* script = R"(

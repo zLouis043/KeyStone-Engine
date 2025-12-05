@@ -3,6 +3,7 @@
 #include <keystone.h>
 #include <string.h>
 #include <string>
+#include <cstddef>
 
 typedef struct {
     int id;
@@ -39,12 +40,6 @@ inline ks_no_ret my_asset_destroy(Ks_AssetData data) {
     ks_dealloc(asset);
 }
 
-inline ks_returns_count my_asset_get_id(Ks_Script_Ctx ctx) {
-    MyCAsset* self = (MyCAsset*)ks_script_get_self(ctx);
-    ks_script_stack_push_obj(ctx, ks_script_create_number(ctx, self->id));
-    return 1;
-}
-
 struct Entity {
     int id;
     Entity(int _id) : id(_id) {}
@@ -66,12 +61,6 @@ inline ks_returns_count entity_exist(Ks_Script_Ctx ctx) {
     Entity* self = (Entity*)ks_script_get_self(ctx);
     if (self) self->exist();
     return 0;
-}
-
-inline ks_returns_count entity_get_id(Ks_Script_Ctx ctx) {
-    Entity* self = (Entity*)ks_script_get_self(ctx);
-    ks_script_stack_push_obj(ctx, ks_script_create_number(ctx, self ? self->id : 0));
-    return 1;
 }
 
 inline ks_returns_count hero_new_void(Ks_Script_Ctx ctx) {
@@ -103,19 +92,6 @@ inline ks_returns_count hero_heal(Ks_Script_Ctx ctx) {
     Hero* self = (Hero*)ks_script_get_self(ctx);
     Ks_Script_Object amt = ks_script_get_arg(ctx, 1);
     self->heal((int)ks_script_obj_as_number(ctx, amt));
-    return 0;
-}
-
-inline ks_returns_count hero_get_hp(Ks_Script_Ctx ctx) {
-    Hero* self = (Hero*)ks_script_get_self(ctx);
-    ks_script_stack_push_obj(ctx, ks_script_create_number(ctx, self->hp));
-    return 1;
-}
-
-inline ks_returns_count hero_set_hp(Ks_Script_Ctx ctx) {
-    Hero* self = (Hero*)ks_script_get_self(ctx);
-    Ks_Script_Object val = ks_script_get_arg(ctx, 1);
-    if (self) self->hp = (int)ks_script_obj_as_number(ctx, val);
     return 0;
 }
 

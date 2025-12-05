@@ -13,6 +13,10 @@
 #include "../core/types.h"
 
 #ifdef __cplusplus
+#include <initializer_list>
+#endif
+
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -146,6 +150,52 @@ typedef struct {
     ks_size signature_len;             ///< Number of arguments in the signature.
 } Ks_Script_Overload_Def;
 
+typedef struct {
+    ks_script_cfunc func;
+    const Ks_Script_Object_Type* args;
+    ks_size num_args;
+} Ks_Script_Sig_Def;
+
+#ifdef __cplusplus
+#define KS_SCRIPT_SIG_DEF(f, ...) \
+    Ks_Script_Sig_Def{ \
+        f, \
+        std::initializer_list<Ks_Script_Object_Type>{__VA_ARGS__}.begin(), \
+        std::initializer_list<Ks_Script_Object_Type>{__VA_ARGS__}.size() \
+    }
+
+#define KS_SCRIPT_SIG_DEF_VOID(f) \
+    Ks_Script_Sig_Def{ f, nullptr, 0 }
+
+#define KS_SCRIPT_FUNC(f, ...) \
+    std::initializer_list<Ks_Script_Sig_Def>{ KS_SCRIPT_SIG_DEF(f, __VA_ARGS__) }.begin(), 1
+
+#define KS_SCRIPT_FUNC_VOID(f) \
+    std::initializer_list<Ks_Script_Sig_Def>{ KS_SCRIPT_SIG_DEF_VOID(f) }.begin(), 1
+
+#define KS_SCRIPT_OVERLOAD(...) \
+    std::initializer_list<Ks_Script_Sig_Def>{__VA_ARGS__}.begin(), \
+    std::initializer_list<Ks_Script_Sig_Def>{__VA_ARGS__}.size()
+
+#else
+#define KS_SCRIPT_SIG_DEF(f, ...) \
+    (Ks_Script_Sig_Def){ .func = f, .args = (const Ks_Script_Object_Type[]){__VA_ARGS__}, .num_args = ... } 
+
+#define KS_SCRIPT_SIG_DEF_VOID(f) \
+    (Ks_Script_Sig_Def){ .func = f, .args = nullptr, .num_args = 0 }
+
+#define KS_SCRIPT_FUNC(...) \
+    (const Ks_Script_Sig_Def[]){ KS_SCRIPT_SIG_DEF(__VA_ARGS__) }, 1
+
+#define KS_SCRIPT_FUNC_VOID(func) \
+    (const Ks_Script_Sig_Def[]){ KS_SCRIPT_DEF_NO_ARGS(func) }, 1
+
+#define KS_SCRIPT_OVERLOAD(...) \
+    (const Ks_Script_Sig_Def[]){__VA_ARGS__}, \
+    (sizeof((const Ks_Script_Sig_Def[]){__VA_ARGS__}) / sizeof(const Ks_Script_Sig_Def))
+
+#endif
+
 /**
  * @brief Script engine error codes.
  */
@@ -227,17 +277,8 @@ KS_API Ks_Script_Object ks_script_create_invalid_obj(Ks_Script_Ctx ctx);
  * @param f The C function pointer.
  * @return A script function object.
  */
-KS_API Ks_Script_Function ks_script_create_cfunc(Ks_Script_Ctx ctx, ks_script_cfunc f);
-
-/**
- * @brief Creates a script function that dispatches to different C functions based on arguments (Overloading).
- * @param ctx The script context.
- * @param overloads Array of overload definitions.
- * @param count Number of overloads.
- * @return A script function object.
- */
-KS_API Ks_Script_Function ks_script_create_overloaded_cfunc(Ks_Script_Ctx ctx, Ks_Script_Overload_Def* overloads, ks_size count);
-
+ //KS_API Ks_Script_Function ks_script_create_cfunc(Ks_Script_Ctx ctx, ks_script_cfunc f);
+KS_API Ks_Script_Function ks_script_create_cfunc(Ks_Script_Ctx ctx, const Ks_Script_Sig_Def* sigs, ks_size count);
 /**
  * @brief Creates a C function with associated upvalues (closure).
  * * The upvalues must be pushed onto the stack before calling this function.
@@ -245,14 +286,8 @@ KS_API Ks_Script_Function ks_script_create_overloaded_cfunc(Ks_Script_Ctx ctx, K
  * @param f The C function.
  * @param n_upvalues Number of upvalues to associate.
  * @return A script function object.
- */
-KS_API Ks_Script_Function ks_script_create_cfunc_with_upvalues(Ks_Script_Ctx ctx,
-                                                        ks_script_cfunc f,
-                                                        ks_size n_upvalues);
-/**
- * @brief Creates an overloaded C function with upvalues.
- */
-KS_API Ks_Script_Function ks_script_create_overloaded_cfunc_with_upvalues(Ks_Script_Ctx ctx, Ks_Script_Overload_Def* overloads, ks_size count, ks_size n_upvalues);
+ */       
+KS_API Ks_Script_Function ks_script_create_cfunc_with_upvalues(Ks_Script_Ctx ctx, const Ks_Script_Sig_Def* sigs, ks_size count, ks_size n_upvalues);
 
 /** @brief Creates a new empty table. */
 KS_API Ks_Script_Table ks_script_create_table(Ks_Script_Ctx ctx);
@@ -489,15 +524,11 @@ KS_API Ks_Script_Userytype_Builder ks_script_usertype_begin(Ks_Script_Ctx ctx, k
 
 KS_API ks_no_ret ks_script_usertype_inherits_from(Ks_Script_Userytype_Builder builder, ks_str base_type_name);
 
-KS_API ks_no_ret ks_script_usertype_add_constructor(Ks_Script_Userytype_Builder builder, ks_script_cfunc ctor);
-KS_API ks_no_ret ks_script_usertype_add_constructor_overload(Ks_Script_Userytype_Builder builder, ks_script_cfunc ctor, Ks_Script_Object_Type* args, ks_size num_args);
+KS_API ks_no_ret ks_script_usertype_add_constructor(Ks_Script_Userytype_Builder builder, const Ks_Script_Sig_Def* sigs, ks_size count);
 KS_API ks_no_ret ks_script_usertype_set_destructor(Ks_Script_Userytype_Builder builder, ks_script_deallocator dtor);
 
-KS_API ks_no_ret ks_script_usertype_add_method(Ks_Script_Userytype_Builder builder, ks_str name, ks_script_cfunc func);
-KS_API ks_no_ret ks_script_usertype_add_overload(Ks_Script_Userytype_Builder builder, ks_str name, ks_script_cfunc func, Ks_Script_Object_Type* args, ks_size num_args);
-KS_API ks_no_ret ks_script_usertype_add_static_method(Ks_Script_Userytype_Builder builder, ks_str name, ks_script_cfunc func);
-KS_API ks_no_ret ks_script_usertype_add_static_overload(Ks_Script_Userytype_Builder builder, ks_str name, ks_script_cfunc func, Ks_Script_Object_Type* args, ks_size num_args);
-
+KS_API ks_no_ret ks_script_usertype_add_method(Ks_Script_Userytype_Builder builder, ks_str name, const Ks_Script_Sig_Def* sigs, ks_size count);
+KS_API ks_no_ret ks_script_usertype_add_static_method(Ks_Script_Userytype_Builder builder, ks_str name, const Ks_Script_Sig_Def* sigs, ks_size count);
 KS_API ks_no_ret ks_script_usertype_add_field(Ks_Script_Userytype_Builder builder, ks_str name, Ks_Type type, ks_size offset, ks_str type_alias);
 KS_API ks_no_ret ks_script_usertype_add_property(Ks_Script_Userytype_Builder builder, ks_str name, ks_script_cfunc getter, ks_script_cfunc setter);
 

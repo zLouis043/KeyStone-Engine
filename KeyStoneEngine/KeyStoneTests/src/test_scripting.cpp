@@ -105,7 +105,10 @@ TEST_CASE("C API: Script Engine Suite") {
                 return 1;
                 };
 
-            Ks_Script_Function func_obj = ks_script_create_cfunc(ctx, add_func);
+            Ks_Script_Function func_obj = ks_script_create_cfunc(ctx,
+                KS_SCRIPT_FUNC(add_func, KS_SCRIPT_OBJECT_TYPE_NUMBER, KS_SCRIPT_OBJECT_TYPE_NUMBER)
+            );
+
             CHECK(ks_script_obj_type(ctx, func_obj) == KS_SCRIPT_OBJECT_TYPE_FUNCTION);
 
             Ks_Script_Function_Call_Result res_c = ks_script_func_callv(ctx, func_obj,
@@ -150,7 +153,7 @@ TEST_CASE("C API: Script Engine Suite") {
 
             ks_script_stack_push_obj(ctx, state_tbl);
 
-            Ks_Script_Function closure = ks_script_create_cfunc_with_upvalues(ctx, counter_func, 1);
+            Ks_Script_Function closure = ks_script_create_cfunc_with_upvalues(ctx, KS_SCRIPT_FUNC_VOID(counter_func), 1);
 
             Ks_Script_Function_Call_Result res1 = ks_script_func_callv(ctx, closure);
             CHECK(ks_script_call_succeded(ctx, res1));
@@ -257,11 +260,13 @@ TEST_CASE("C API: Script Engine Suite") {
         ks_script_begin_scope(ctx);
         {
             auto b = ks_script_usertype_begin(ctx, "Hero", sizeof(Hero));
-            ks_script_usertype_add_constructor(b, hero_new_void);
+            ks_script_usertype_add_constructor(b, KS_SCRIPT_FUNC_VOID(hero_new_void));
             ks_script_usertype_set_destructor(b, hero_delete);
 
-            ks_script_usertype_add_method(b, "heal", hero_heal);
-            ks_script_usertype_add_property(b, "hp", hero_get_hp, hero_set_hp);
+            ks_script_usertype_add_method(b, "heal",
+                KS_SCRIPT_FUNC(hero_heal, KS_SCRIPT_OBJECT_TYPE_NUMBER)
+            );
+            ks_script_usertype_add_field(b, "hp", KS_TYPE_INT, offsetof(Hero, hp), nullptr);
 
             ks_script_usertype_end(b);
 
@@ -285,7 +290,7 @@ TEST_CASE("C API: Script Engine Suite") {
     SUBCASE("Usertypes: Fields (Direct Access) & Nested Types") {
         ks_script_begin_scope(ctx); {
             auto b_vec = ks_script_usertype_begin(ctx, "Vec3", sizeof(Vec3));
-            ks_script_usertype_add_constructor(b_vec, vec3_new);
+            ks_script_usertype_add_constructor(b_vec, KS_SCRIPT_FUNC_VOID(vec3_new));
 
             ks_script_usertype_add_field(b_vec, "x", KS_TYPE_FLOAT, offsetof(Vec3, x), nullptr);
             ks_script_usertype_add_field(b_vec, "y", KS_TYPE_FLOAT, offsetof(Vec3, y), nullptr);
@@ -293,7 +298,7 @@ TEST_CASE("C API: Script Engine Suite") {
             ks_script_usertype_end(b_vec);
 
             auto b_trans = ks_script_usertype_begin(ctx, "Transform", sizeof(Transform));
-            ks_script_usertype_add_constructor(b_trans, transform_new);
+            ks_script_usertype_add_constructor(b_trans, KS_SCRIPT_FUNC_VOID(transform_new));
 
             ks_script_usertype_add_field(b_trans, "id", KS_TYPE_INT, offsetof(Transform, id), nullptr);
 
@@ -336,14 +341,55 @@ TEST_CASE("C API: Script Engine Suite") {
         ks_script_end_scope(ctx);
     }
 
+    SUBCASE("Usertypes: Properties (Getters/Setters Logic)") {
+        ks_script_begin_scope(ctx);
+        {
+            struct PropTest { int val; };
+
+            auto get_double = [](Ks_Script_Ctx c) -> ks_returns_count {
+                auto* self = (PropTest*)ks_script_get_self(c);
+                ks_script_stack_push_number(c, self->val * 2.0);
+                return 1;
+            };
+
+            auto set_clamped = [](Ks_Script_Ctx c) -> ks_returns_count {
+                auto* self = (PropTest*)ks_script_get_self(c);
+                int v = (int)ks_script_obj_as_number(c, ks_script_get_arg(c, 1));
+                if (v < 0) v = 0;
+                self->val = v;
+                return 0;
+            };
+
+            auto b = ks_script_usertype_begin(ctx, "PropTest", sizeof(PropTest));
+            ks_script_usertype_add_constructor(b, KS_SCRIPT_FUNC_VOID([](Ks_Script_Ctx c) { new(ks_script_get_self(c)) PropTest{ 10 }; return 0; }));
+            ks_script_usertype_add_property(b, "value", get_double, set_clamped);
+            ks_script_usertype_end(b);
+
+            const char* script = R"(
+                local p = PropTest()
+                p.value = -50
+                local v1 = p.value
+                
+                p.value = 5
+                local v2 = p.value
+                return v1, v2
+            )";
+
+            Ks_Script_Function_Call_Result res = ks_script_do_string(ctx, script);
+            CHECK(ks_script_obj_as_number(ctx, ks_script_call_get_return_at(ctx, res, 1)) == 0.0);
+            CHECK(ks_script_obj_as_number(ctx, ks_script_call_get_return_at(ctx, res, 2)) == 10.0);
+        }
+        ks_script_end_scope(ctx);
+    }
+
     SUBCASE("Usertypes: Inheritance & Overloading") {
         ks_script_begin_scope(ctx); {
             const char* T_ENT = "TestEntity";
             const char* T_HERO = "TestHero";
 
             auto b_ent = ks_script_usertype_begin(ctx, T_ENT, sizeof(Entity));
-            ks_script_usertype_add_method(b_ent, "exist", entity_exist);
-            ks_script_usertype_add_property(b_ent, "id", entity_get_id, nullptr);
+            ks_script_usertype_add_method(b_ent, "exist", KS_SCRIPT_FUNC_VOID(entity_exist));
+            ks_script_usertype_add_field(b_ent, "id", KS_TYPE_INT, offsetof(Entity, id), nullptr);
             ks_script_usertype_end(b_ent);
 
             auto b_hero = ks_script_usertype_begin(ctx, T_HERO, sizeof(Hero));
@@ -351,16 +397,20 @@ TEST_CASE("C API: Script Engine Suite") {
 
             Ks_Script_Object_Type args_name[] = { KS_SCRIPT_OBJECT_TYPE_STRING };
             Ks_Script_Object_Type args_full[] = { KS_SCRIPT_OBJECT_TYPE_STRING, KS_SCRIPT_OBJECT_TYPE_NUMBER };
-            ks_script_usertype_add_constructor(b_hero, hero_new_void);
-            ks_script_usertype_add_constructor_overload(b_hero, hero_new_name, args_name, 1);
-            ks_script_usertype_add_constructor_overload(b_hero, hero_new_full, args_full, 2);
+            ks_script_usertype_add_constructor(b_hero, KS_SCRIPT_OVERLOAD(
+                KS_SCRIPT_SIG_DEF_VOID(hero_new_void), 
+                KS_SCRIPT_SIG_DEF(hero_new_name, KS_SCRIPT_OBJECT_TYPE_STRING), 
+                KS_SCRIPT_SIG_DEF(hero_new_full, KS_SCRIPT_OBJECT_TYPE_STRING, KS_SCRIPT_OBJECT_TYPE_NUMBER)
+            ));
             ks_script_usertype_set_destructor(b_hero, hero_delete);
 
-            Ks_Script_Object_Type args_atk[] = { KS_SCRIPT_OBJECT_TYPE_NUMBER };
-            ks_script_usertype_add_overload(b_hero, "attack", hero_attack_basic, nullptr, 0);
-            ks_script_usertype_add_overload(b_hero, "attack", hero_attack_strong, args_atk, 1);
 
-            ks_script_usertype_add_property(b_hero, "hp", hero_get_hp, hero_set_hp);
+            ks_script_usertype_add_method(b_hero, "attack", KS_SCRIPT_OVERLOAD(
+                KS_SCRIPT_SIG_DEF_VOID(hero_attack_basic),
+                KS_SCRIPT_SIG_DEF(hero_attack_strong, KS_SCRIPT_OBJECT_TYPE_NUMBER)
+            ));
+
+            ks_script_usertype_add_field(b_hero, "hp", KS_TYPE_INT, offsetof(Hero, hp), nullptr);
 
             ks_script_usertype_end(b_hero);
 

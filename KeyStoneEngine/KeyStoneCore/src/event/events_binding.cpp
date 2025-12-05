@@ -212,9 +212,10 @@ KS_API ks_no_ret ks_event_manager_lua_bind(Ks_EventManager em, Ks_Script_Ctx ctx
 
     auto reg = [&](const char* n, ks_script_cfunc f) {
         ks_script_stack_push_obj(ctx, em_obj);
-        Ks_Script_Function fn_obj = ks_script_create_cfunc_with_upvalues(ctx, f, 1);
+        // UPDATED: Nuova sintassi macro
+        Ks_Script_Function fn_obj = ks_script_create_cfunc_with_upvalues(ctx, KS_SCRIPT_FUNC_VOID(f), 1);
         ks_script_table_set(ctx, tbl, ks_script_create_cstring(ctx, n), fn_obj);
-        };
+    };
 
     reg("register", l_events_register);
     reg("subscribe", l_events_subscribe);

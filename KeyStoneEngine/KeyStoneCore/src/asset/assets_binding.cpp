@@ -87,7 +87,7 @@ KS_API ks_no_ret ks_assets_manager_lua_bind(Ks_Script_Ctx ctx, Ks_AssetsManager 
 
     auto reg_func = [&](const char* name, ks_script_cfunc func) {
         ks_script_stack_push_obj(ctx, am_upval);
-        Ks_Script_Function fn_obj = ks_script_create_cfunc_with_upvalues(ctx, func, 1);
+        Ks_Script_Function fn_obj = ks_script_create_cfunc_with_upvalues(ctx, KS_SCRIPT_FUNC_VOID(func), 1);
         ks_script_table_set(ctx, assets_tbl, ks_script_create_cstring(ctx, name), fn_obj);
     };
 
