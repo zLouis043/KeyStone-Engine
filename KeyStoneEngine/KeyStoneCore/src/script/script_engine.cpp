@@ -60,6 +60,7 @@ static void register_methods_to_table(lua_State* L, int table_idx, const std::ma
 static void chain_usertype_tables(lua_State* L, int child_idx, const std::string& base_name, const char* table_suffix);
 static void save_usertype_table(lua_State* L, int table_idx, const std::string& type_name, const char* table_suffix);
 static std::vector<MethodInfo> convert_sigs(const Ks_Script_Sig_Def* sigs, size_t count, const char* name = "");
+static int enum_newindex_error(lua_State* L);
 
 static int ks_script_error_handler(lua_State* L);
 
@@ -923,6 +924,41 @@ KS_API ks_no_ret ks_script_usertype_end(Ks_Script_Userytype_Builder builder)
     b->~KsUsertypeBuilder();
     ks_dealloc(b);
 }
+
+KS_API ks_no_ret ks_script_register_enum_impl(Ks_Script_Ctx ctx, ks_str enum_name, const Ks_Script_Enum_Member* members, ks_size count)
+{
+    if (!ctx || !enum_name || !members || count == 0) return;
+
+    auto* sctx = static_cast<KsScriptEngineCtx*>(ctx);
+    lua_State* L = sctx->get_raw_state();
+
+    lua_newtable(L);
+    for (ks_size i = 0; i < count; ++i) {
+        lua_pushstring(L, members[i].name);
+        lua_pushinteger(L, (lua_Integer)members[i].value);
+        lua_settable(L, -3);
+    }
+
+    lua_newtable(L);
+
+    lua_newtable(L);
+
+    lua_pushvalue(L, -3);
+    lua_setfield(L, -2, "__index");
+
+    lua_pushcfunction(L, enum_newindex_error);
+    lua_setfield(L, -2, "__newindex");
+
+    lua_pushliteral(L, "readonly");
+    lua_setfield(L, -2, "__metatable");
+
+    lua_setmetatable(L, -2);
+
+    lua_setglobal(L, enum_name);
+
+    lua_pop(L, 1);
+}
+
 KS_API ks_no_ret ks_script_stack_push_number(Ks_Script_Ctx ctx, ks_double val)
 {
     if (!ctx) return;
@@ -2762,4 +2798,8 @@ static std::vector<MethodInfo> convert_sigs(const Ks_Script_Sig_Def* sigs, size_
         infos.push_back({ name, sigs[i].func, signature });
     }
     return infos;
+}
+
+static int enum_newindex_error(lua_State* L) {
+    return luaL_error(L, "Attempt to modify a read-only enum table");
 }

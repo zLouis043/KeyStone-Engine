@@ -1,20 +1,23 @@
 #include "../../include/core/types_binding.h"
 
 KS_API ks_no_ret ks_types_lua_bind(Ks_Script_Ctx ctx) {
-    ks_script_begin_scope(ctx); {
-        Ks_Script_Table types_tbl = ks_script_create_named_table(ctx, "type");
-        ks_script_promote(ctx, types_tbl);
-        ks_script_table_set(ctx, types_tbl, ks_script_create_cstring(ctx, "BOOL"), ks_script_create_integer(ctx, KS_TYPE_BOOL));
-        ks_script_table_set(ctx, types_tbl, ks_script_create_cstring(ctx, "CHAR"), ks_script_create_integer(ctx, KS_TYPE_CHAR));
-        ks_script_table_set(ctx, types_tbl, ks_script_create_cstring(ctx, "INT"), ks_script_create_integer(ctx, KS_TYPE_INT));
-        ks_script_table_set(ctx, types_tbl, ks_script_create_cstring(ctx, "UINT"), ks_script_create_integer(ctx, KS_TYPE_UINT));
-        ks_script_table_set(ctx, types_tbl, ks_script_create_cstring(ctx, "FLOAT"), ks_script_create_integer(ctx, KS_TYPE_FLOAT));
-        ks_script_table_set(ctx, types_tbl, ks_script_create_cstring(ctx, "CSTRING"), ks_script_create_integer(ctx, KS_TYPE_CSTRING));
-        ks_script_table_set(ctx, types_tbl, ks_script_create_cstring(ctx, "PTR"), ks_script_create_integer(ctx, KS_TYPE_PTR));
-        ks_script_table_set(ctx, types_tbl, ks_script_create_cstring(ctx, "USERDATA"), ks_script_create_integer(ctx, KS_TYPE_USERDATA));
-        ks_script_table_set(ctx, types_tbl, ks_script_create_cstring(ctx, "TABLE"), ks_script_create_integer(ctx, KS_TYPE_SCRIPT_TABLE));
-        ks_script_table_set(ctx, types_tbl, ks_script_create_cstring(ctx, "FUNCTION"), ks_script_create_integer(ctx, KS_TYPE_SCRIPT_FUNCTION));
-        ks_script_table_set(ctx, types_tbl, ks_script_create_cstring(ctx, "COROUTINE"), ks_script_create_integer(ctx, KS_TYPE_SCRIPT_COROUTINE));
-        ks_script_table_set(ctx, types_tbl, ks_script_create_cstring(ctx, "ANY"), ks_script_create_integer(ctx, KS_TYPE_SCRIPT_ANY));
-    }ks_script_end_scope(ctx);
+    ks_script_register_enum(ctx, "type",
+        KS_SCRIPT_ENUM_MEMBER("UNKNOWN", KS_TYPE_UNKNOWN),
+        KS_SCRIPT_ENUM_MEMBER("NIL", KS_TYPE_NIL),
+        KS_SCRIPT_ENUM_MEMBER("VOID", KS_TYPE_VOID),
+        KS_SCRIPT_ENUM_MEMBER("BOOL", KS_TYPE_BOOL),
+        KS_SCRIPT_ENUM_MEMBER("CHAR", KS_TYPE_CHAR),
+        KS_SCRIPT_ENUM_MEMBER("INT", KS_TYPE_INT),
+        KS_SCRIPT_ENUM_MEMBER("UINT", KS_TYPE_UINT),
+        KS_SCRIPT_ENUM_MEMBER("FLOAT", KS_TYPE_FLOAT),
+        KS_SCRIPT_ENUM_MEMBER("DOUBLE", KS_TYPE_DOUBLE),
+        KS_SCRIPT_ENUM_MEMBER("CSTRING", KS_TYPE_CSTRING),
+        KS_SCRIPT_ENUM_MEMBER("PTR", KS_TYPE_PTR),
+        KS_SCRIPT_ENUM_MEMBER("USERDATA", KS_TYPE_USERDATA),
+        KS_SCRIPT_ENUM_MEMBER("LIGHTUSERDATA", KS_TYPE_LIGHTUSERDATA),
+        KS_SCRIPT_ENUM_MEMBER("TABLE", KS_TYPE_SCRIPT_TABLE),
+        KS_SCRIPT_ENUM_MEMBER("FUNCTION", KS_TYPE_SCRIPT_FUNCTION),
+        KS_SCRIPT_ENUM_MEMBER("COROUTINE", KS_TYPE_SCRIPT_COROUTINE),
+        KS_SCRIPT_ENUM_MEMBER("ANY", KS_TYPE_SCRIPT_ANY)
+    );
 }

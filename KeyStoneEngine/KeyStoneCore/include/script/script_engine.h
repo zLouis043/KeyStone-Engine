@@ -224,6 +224,14 @@ typedef enum {
 } Ks_Script_Coroutine_Status;
 
 /**
+ * @brief Define a single member of an enumeration ( name + value )
+ */
+typedef struct {
+    ks_str name;
+    ks_int64 value;
+} Ks_Script_Enum_Member;
+
+/**
  * @brief Creates a new script context (VM).
  * @return Handle to the created context.
  */
@@ -567,6 +575,38 @@ KS_API ks_no_ret ks_script_usertype_add_metamethod(Ks_Script_Userytype_Builder b
  * @param builder The builder handle (invalidated after call).
  */
 KS_API ks_no_ret ks_script_usertype_end(Ks_Script_Userytype_Builder builder);
+
+/* --- API Enum Registration --- */
+
+/**
+ * @brief Register a global enumeration ( as a read-only table)
+ * @param ctx The script context
+ * @param enum_name The name of the global table (es. "Keys").
+ * @param members Array of the members.
+ * @param count Members count.
+ */
+KS_API ks_no_ret ks_script_register_enum_impl(Ks_Script_Ctx ctx, ks_str enum_name, const Ks_Script_Enum_Member* members, ks_size count);
+
+/* --- Macro Helper --- */
+
+#ifdef __cplusplus
+#define KS_SCRIPT_ENUM_MEMBER(name, value) \
+    Ks_Script_Enum_Member{ name, (ks_int64)value }
+
+#define ks_script_register_enum(ctx, name, ...) \
+    ks_script_register_enum_impl(ctx, name, \
+        std::initializer_list<Ks_Script_Enum_Member>{__VA_ARGS__}.begin(), \
+        std::initializer_list<Ks_Script_Enum_Member>{__VA_ARGS__}.size())
+
+#else
+#define KS_SCRIPT_ENUM_MEMBER(name, value) \
+    (Ks_Script_Enum_Member){ name, (ks_int64)value }
+
+#define ks_script_register_enum(ctx, name, ...) \
+    ks_script_register_enum_impl(ctx, name, \
+        (const Ks_Script_Enum_Member[]){__VA_ARGS__}, \
+        sizeof((const Ks_Script_Enum_Member[]){__VA_ARGS__}) / sizeof(Ks_Script_Enum_Member))
+#endif
 
 #ifdef __cplusplus
 }
