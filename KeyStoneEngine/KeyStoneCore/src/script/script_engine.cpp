@@ -1,4 +1,5 @@
 #include "../../include/script/script_engine.h"
+#include "../../include/script/script_engine.h"
 #include "../../include/script/script_engine_internal.h"
 #include "../../include/memory/memory.h"
 #include "../../include/core/log.h"
@@ -1732,7 +1733,7 @@ ks_str ks_script_obj_get_usertype_name(Ks_Script_Ctx ctx, Ks_Script_Object obj)
 
         char* copy = (char*)ks_alloc_debug(
             len + 1,
-            KS_LT_USER_MANAGED,
+            KS_LT_FRAME,
             KS_TAG_SCRIPT,
             "UsertypeNameCopy"
         );
@@ -1783,7 +1784,7 @@ KS_API ks_str ks_script_obj_as_cstring(Ks_Script_Ctx ctx, Ks_Script_Object obj)
     size_t len;
     const char* lua_str = lua_tolstring(L, -1, &len);
 
-    char* copy = (char*)ks_alloc_debug(len + 1, KS_LT_USER_MANAGED, KS_TAG_SCRIPT, "StringCopy");
+    char* copy = (char*)ks_alloc_debug(len + 1, KS_LT_FRAME, KS_TAG_SCRIPT, "StringCopy");
     memcpy(copy, lua_str, len + 1);
 
     lua_pop(L, 1);
@@ -2080,7 +2081,7 @@ KS_API ks_str ks_script_obj_to_string(Ks_Script_Ctx ctx, Ks_Script_Object obj)
         if (str) {
             char* copy = (char*)ks_alloc_debug(
                 (len + 1) * sizeof(char),
-                KS_LT_USER_MANAGED,
+                KS_LT_FRAME,
                 KS_TAG_GARBAGE,
                 "ObjToStringCopy"
             );
@@ -2094,7 +2095,7 @@ KS_API ks_str ks_script_obj_to_string(Ks_Script_Ctx ctx, Ks_Script_Object obj)
         ks_size len = strlen(str);
         char* copy = (char*)ks_alloc_debug(
             (len + 1) * sizeof(char),
-            KS_LT_USER_MANAGED,
+            KS_LT_FRAME,
             KS_TAG_GARBAGE,
             "ObjToStringCopy"
         );

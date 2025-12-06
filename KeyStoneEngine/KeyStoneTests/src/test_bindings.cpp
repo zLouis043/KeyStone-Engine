@@ -44,6 +44,8 @@ ks_returns_count test_set_received(Ks_Script_Ctx ctx) {
 TEST_CASE("Managers-Lua bindings Tests") {
 	ks_memory_init();
 
+    ks_set_frame_capacity(128 * 1024);
+
     reset_c_globals();
 
 	Ks_Script_Ctx ctx = ks_script_create_ctx();
