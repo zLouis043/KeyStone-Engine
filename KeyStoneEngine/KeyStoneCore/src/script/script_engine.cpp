@@ -760,10 +760,14 @@ Ks_UserData ks_script_usertype_get_body(Ks_Script_Ctx ctx, Ks_Script_Object obj)
     }
 
     else {
-        ptrdiff_t offset = (uint8_t*)handle->instance - (uint8_t*)handle;
-        if (total_size >= (size_t)offset) {
+        char* start_ptr = reinterpret_cast<char*>(handle);
+        char* data_ptr = reinterpret_cast<char*>(handle->instance);
+        
+        ptrdiff_t header_size = data_ptr - start_ptr;
+
+        if (header_size > 0 && total_size > static_cast<size_t>(header_size)) {
             result.data = handle->instance;
-            result.size = total_size - (size_t)offset;
+            result.size = total_size - static_cast<size_t>(header_size);
         }
     }
 
