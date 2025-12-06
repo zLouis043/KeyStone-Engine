@@ -295,7 +295,7 @@ namespace script {
             if constexpr (std::is_arithmetic_v<std::decay_t<T>>) {
                 auto obj = ks_script_create_number(m_ctx, static_cast<double>(value));
                 ks_script_set_global(m_ctx, name.c_str(), obj);
-                // Non serve free_obj qui perché è un numero (copiato per valore)
+                // Non serve free_obj qui perchï¿½ ï¿½ un numero (copiato per valore)
             }
             // ... altri tipi ...
         }
@@ -307,7 +307,7 @@ namespace script {
         void check_error(Ks_Script_Object possible_err_obj) {
             if (possible_err_obj.type == KS_SCRIPT_OBJECT_TYPE_NIL ||
                 possible_err_obj.type == KS_SCRIPT_OBJECT_TYPE_UNKNOWN) { // O altro modo per rilevare fallimento
-                // Verifica se c'è un errore nel contesto
+                // Verifica se c'ï¿½ un errore nel contesto
                 if (ks_script_get_last_error(m_ctx) != KS_SCRIPT_ERROR_NONE) {
                     throw Error(ks_script_get_last_error_str(m_ctx));
                 }
@@ -418,7 +418,7 @@ namespace asset {
         }
 
         template <typename T>
-        handle load_asset(const std::string& asset_name, const uint8_t* data) {
+        handle load_asset(const std::string& asset_name, const Ks_UserData data) {
             auto found = types.find(std::type_index(typeid(T)));
             if (found == types.end()) {
                 throw std::runtime_error("Trying to load an asset without registering first its type");
