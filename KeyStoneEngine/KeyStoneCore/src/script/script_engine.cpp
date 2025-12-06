@@ -2619,7 +2619,7 @@ static int overload_dispatcher_thunk(lua_State* L) {
             size_t total_size = sizeof(KsUsertypeInstanceHandle) + size;
             void* raw_mem = lua_newuserdatauv(L, total_size, 0);
 
-            auto* handle = new(raw_mem) KsUsertypeInstanceHandle()
+            auto* handle = new(raw_mem) KsUsertypeInstanceHandle();
             handle->instance = static_cast<ks_byte*>(raw_mem) + sizeof(KsUsertypeInstanceHandle);
             handle->size = size;
             handle->is_borrowed = false;
