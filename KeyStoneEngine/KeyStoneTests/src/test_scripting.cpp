@@ -44,14 +44,6 @@ TEST_CASE("C API: Script Engine Suite") {
         } ks_script_end_scope(ctx);
     }
 
-    SUBCASE("Integers") {
-        ks_script_begin_scope(ctx);
-
-        
-
-        ks_script_end_scope(ctx);
-    }
-
     SUBCASE("Stack Manipulation") {
         ks_script_begin_scope(ctx); {
             ks_script_stack_clear(ctx);

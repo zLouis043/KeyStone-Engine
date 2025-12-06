@@ -28,6 +28,11 @@ ks_bool c_subscriber_cb(Ks_Event_Payload data, void* user_data) {
     return ks_true;
 }
 
+struct GameConfig {
+    int difficulty;
+    float volume;
+};
+
 ks_returns_count test_set_received(Ks_Script_Ctx ctx) {
     g_c_int_val = (int)ks_script_obj_as_number(ctx, ks_script_get_arg(ctx, 1));
     const char* s = ks_script_obj_as_cstring(ctx, ks_script_get_arg(ctx, 2));
@@ -55,6 +60,9 @@ TEST_CASE("Managers-Lua bindings Tests") {
 
     ks_script_set_global(ctx, "test_set_received", ks_script_create_cfunc(ctx, KS_SCRIPT_FUNC_VOID(test_set_received)));
 
+    Ks_StateManager sm = ks_state_manager_create();
+    ks_state_manager_lua_bind(sm, ctx);
+
 	SUBCASE("Assets Manager Lua Bindings") {
 		Ks_IAsset interface;
 		interface.load_from_file_fn = my_asset_load_file;
@@ -74,11 +82,11 @@ TEST_CASE("Managers-Lua bindings Tests") {
             end
             
             local data = assets.get_data(h)
-        
+
             local h_ref = assets.get("hero_tex")
         
             if h == h_ref then
-                return "Success"
+                return data.id, "Success"
             else
                 return "Handle Mismatch"
             end
@@ -90,12 +98,12 @@ TEST_CASE("Managers-Lua bindings Tests") {
             FAIL(ks_script_get_last_error_str(ctx));
         }
 
-        const char* ret_str = ks_script_obj_as_cstring(ctx, ks_script_call_get_return(ctx, res));
+        const char* ret_str = ks_script_obj_as_cstring(ctx, ks_script_call_get_return_at(ctx, res, 2));
         REQUIRE(ret_str != nullptr);
         CHECK(strcmp(ret_str, "Success") == 0);
 	}
 
-    SUBCASE("1. C++ Register -> Lua Subscribe -> C++ Publish") {
+    SUBCASE("Event Manager: C++ Register -> Lua Subscribe -> C++ Publish") {
         Ks_Handle evt = ks_event_manager_register(em, "C_Event", KS_TYPE_INT, KS_TYPE_CSTRING);
 
         const char* script = R"(
@@ -115,7 +123,7 @@ TEST_CASE("Managers-Lua bindings Tests") {
         CHECK(g_c_str_val == "Hello Lua");
     }
 
-    SUBCASE("2. Lua Register -> C++ Subscribe -> Lua Publish") {
+    SUBCASE("Event Manager: Lua Register -> C++ Subscribe -> Lua Publish") {
         const char* setup_script = R"(
             local h = events.register("Lua_Event", {type.INT, type.CSTRING})
             return h
@@ -141,7 +149,7 @@ TEST_CASE("Managers-Lua bindings Tests") {
         CHECK(g_c_str_val == "From Lua");
     }
 
-    SUBCASE("3. Lua Register -> Lua Subscribe -> Lua Publish (Loopback)") {
+    SUBCASE("Event Manager: Lua Register -> Lua Subscribe -> Lua Publish (Loopback)") {
         const char* script = R"(
             local h = events.register("Loop_Event", {type.BOOL})
             local received_val = false
@@ -164,7 +172,7 @@ TEST_CASE("Managers-Lua bindings Tests") {
         CHECK(g_c_str_val == "OK");
     }
 
-    SUBCASE("4. Table Passing (No Unwrapping)") {
+    SUBCASE("Event Manager: Table Passing (No Unwrapping)") {
         Ks_Handle evt = ks_event_manager_register(em, "Table_Event", KS_TYPE_SCRIPT_TABLE);
 
         static bool table_verified = false;
@@ -202,6 +210,77 @@ TEST_CASE("Managers-Lua bindings Tests") {
 
         CHECK(table_verified == true);
     }
+
+    SUBCASE("State Manager Integration") {
+        ks_script_begin_scope(ctx);
+
+        const char* script_create = R"(
+            local hp = state("hp", 100)
+            local sp = state("speed", 5.5)
+            return hp:get(), sp:get()
+        )";
+
+        auto res1 = ks_script_do_cstring(ctx, script_create);
+
+        CHECK(ks_script_call_succeded(ctx, res1));
+        CHECK(ks_script_obj_as_integer(ctx, ks_script_call_get_return_at(ctx, res1, 1)) == 100);
+
+        Ks_Handle h_hp = ks_state_manager_get_handle(sm, "hp");
+        CHECK(ks_state_get_int(sm, h_hp) == 100);
+
+        const char* script_update = R"(
+            local hp = state("hp")
+            hp:set(80)
+            return hp:get()
+        )";
+        auto res2 = ks_script_do_cstring(ctx, script_update);
+        CHECK(ks_script_obj_as_integer(ctx, ks_script_call_get_return(ctx, res2)) == 80);
+        CHECK(ks_state_get_int(sm, h_hp) == 80);
+
+        const char* script_fail = R"(
+            local hp = state("hp")
+            hp:set("stringa")
+            return hp:get()
+        )";
+        auto res3 = ks_script_do_cstring(ctx, script_fail);
+        CHECK(ks_script_obj_as_integer(ctx, ks_script_call_get_return(ctx, res3)) == 80);
+
+        auto b = ks_script_usertype_begin(ctx, "GameConfig", sizeof(GameConfig));
+        ks_script_usertype_add_constructor(b, KS_SCRIPT_FUNC_VOID([](Ks_Script_Ctx c) {
+            auto* p = (GameConfig*)ks_script_get_self(c); p->difficulty = 1; p->volume = 0.5f; return 0;
+            }));
+        ks_script_usertype_add_field(b, "difficulty", KS_TYPE_INT, offsetof(GameConfig, difficulty), nullptr);
+        ks_script_usertype_end(b);
+
+        const char* script_obj = R"(
+            local cfg = GameConfig()
+            cfg.difficulty = 3
+            
+            local s_cfg = state("config", cfg)
+            
+            local saved = s_cfg:get()
+            saved.difficulty = 5 
+            
+            return saved.difficulty
+        )";
+
+        auto res4 = ks_script_do_cstring(ctx, script_obj);
+        CHECK(ks_script_call_succeded(ctx, res4));
+
+        Ks_Handle h_cfg = ks_state_manager_get_handle(sm, "config");
+        CHECK(h_cfg != KS_INVALID_HANDLE);
+
+        const char* t_name;
+        void* ptr = ks_state_get_usertype_info(sm, h_cfg, &t_name, nullptr);
+        REQUIRE(ptr != nullptr);
+        CHECK(strcmp(t_name, "GameConfig") == 0);
+
+        CHECK(((GameConfig*)ptr)->difficulty == 5);
+
+        ks_script_end_scope(ctx);
+    }
+
+    ks_state_manager_destroy(sm);
 
     ks_assets_manager_destroy(am);
 

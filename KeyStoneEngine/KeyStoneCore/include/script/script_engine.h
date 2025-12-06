@@ -398,6 +398,7 @@ KS_API ks_no_ret ks_script_stack_dump(Ks_Script_Ctx ctx);
 KS_API Ks_Type ks_script_obj_type(Ks_Script_Ctx ctx, Ks_Script_Object obj);
 KS_API ks_bool ks_script_obj_is_valid(Ks_Script_Ctx ctx, Ks_Script_Object obj);
 KS_API ks_bool ks_script_obj_is(Ks_Script_Ctx ctx, Ks_Script_Object obj, Ks_Type type);
+KS_API ks_str ks_script_obj_get_usertype_name(Ks_Script_Ctx ctx, Ks_Script_Object obj);
 KS_API ks_double ks_script_obj_as_number(Ks_Script_Ctx ctx, Ks_Script_Object obj);
 KS_API ks_int64 ks_script_obj_as_integer(Ks_Script_Ctx ctx, Ks_Script_Object obj);
 KS_API ks_bool ks_script_obj_as_boolean(Ks_Script_Ctx ctx, Ks_Script_Object obj);
@@ -525,6 +526,7 @@ KS_API ks_no_ret ks_script_set_type_name(Ks_Script_Ctx ctx, Ks_Script_Object obj
 KS_API ks_ptr ks_script_get_self(Ks_Script_Ctx ctx);
 
 KS_API ks_ptr ks_script_usertype_get_ptr(Ks_Script_Ctx ctx, Ks_Script_Object obj);
+KS_API Ks_UserData ks_script_usertype_get_body(Ks_Script_Ctx ctx, Ks_Script_Object obj);
 
 /* --- Usertype Builder --- */
 /**

@@ -13,3 +13,6 @@
 #include "./include/event/event.h"
 #include "./include/event/events_manager.h"
 #include "./include/event/events_binding.h"
+#include "./include/state/state_manager.h"
+#include "./include/state/state.h"
+#include "./include/state/state_binding.h"
