@@ -62,6 +62,7 @@ typedef enum {
  */
 typedef struct {
   union {
+    ks_int64 integer;
     ks_double number;
     ks_bool boolean;
     ks_ptr lightuserdata;
@@ -256,6 +257,8 @@ KS_API ks_no_ret ks_script_promote(Ks_Script_Ctx ctx, Ks_Script_Object obj);
 
 /** @brief Creates a number object. */
 KS_API Ks_Script_Object ks_script_create_number(Ks_Script_Ctx ctx, ks_double val);
+/** @brief Creates an integer object. */
+KS_API Ks_Script_Object ks_script_create_integer(Ks_Script_Ctx ctx, ks_int64 val);
 /** @brief Creates a boolean object. */
 KS_API Ks_Script_Object ks_script_create_boolean(Ks_Script_Ctx ctx, ks_bool val);
 /** @brief Creates a nil object. */
@@ -360,11 +363,13 @@ KS_API ks_no_ret ks_script_dump_registry(Ks_Script_Ctx ctx);
 
 /* --- Stack Manipulation (1-based indexing) --- */
 KS_API ks_no_ret ks_script_stack_push_number(Ks_Script_Ctx ctx, ks_double val);
+KS_API ks_no_ret ks_script_stack_push_integer(Ks_Script_Ctx ctx, ks_int64 val);
 KS_API ks_no_ret ks_script_stack_push_boolean(Ks_Script_Ctx ctx, ks_bool val);
 KS_API ks_no_ret ks_script_stack_push_string(Ks_Script_Ctx ctx, ks_str val);
 KS_API ks_no_ret ks_script_stack_push_obj(Ks_Script_Ctx ctx, Ks_Script_Object val);
 
 KS_API ks_double ks_script_stack_pop_number(Ks_Script_Ctx ctx);
+KS_API ks_int64 ks_script_stack_pop_integer(Ks_Script_Ctx ctx);
 KS_API ks_bool ks_script_stack_pop_boolean(Ks_Script_Ctx ctx);
 KS_API ks_str ks_script_stack_pop_string(Ks_Script_Ctx ctx);
 KS_API Ks_Script_Object ks_script_stack_pop_obj(Ks_Script_Ctx ctx);
@@ -386,6 +391,7 @@ KS_API Ks_Type ks_script_obj_type(Ks_Script_Ctx ctx, Ks_Script_Object obj);
 KS_API ks_bool ks_script_obj_is_valid(Ks_Script_Ctx ctx, Ks_Script_Object obj);
 KS_API ks_bool ks_script_obj_is(Ks_Script_Ctx ctx, Ks_Script_Object obj, Ks_Type type);
 KS_API ks_double ks_script_obj_as_number(Ks_Script_Ctx ctx, Ks_Script_Object obj);
+KS_API ks_int64 ks_script_obj_as_integer(Ks_Script_Ctx ctx, Ks_Script_Object obj);
 KS_API ks_bool ks_script_obj_as_boolean(Ks_Script_Ctx ctx, Ks_Script_Object obj);
 KS_API ks_str ks_script_obj_as_cstring(Ks_Script_Ctx ctx, Ks_Script_Object obj);
 KS_API Ks_UserData ks_script_obj_as_userdata(Ks_Script_Ctx ctx, Ks_Script_Object obj);
@@ -395,6 +401,7 @@ KS_API Ks_Script_Coroutine ks_script_obj_as_coroutine(Ks_Script_Ctx ctx, Ks_Scri
 
 // Safe conversions with default values
 KS_API ks_double ks_script_obj_as_number_or(Ks_Script_Ctx ctx, Ks_Script_Object obj, ks_double def);
+KS_API ks_int64 ks_script_obj_as_integer_or(Ks_Script_Ctx ctx, Ks_Script_Object obj, ks_int64 def);
 KS_API ks_bool ks_script_obj_as_boolean_or(Ks_Script_Ctx ctx, Ks_Script_Object obj, ks_bool def);
 KS_API ks_str ks_script_obj_as_cstring_or(Ks_Script_Ctx ctx, Ks_Script_Object obj, ks_str def);
 KS_API Ks_UserData ks_script_obj_as_userdata_or(Ks_Script_Ctx ctx, Ks_Script_Object obj, Ks_UserData def);
@@ -404,6 +411,7 @@ KS_API Ks_Script_Coroutine ks_script_obj_as_coroutine_or(Ks_Script_Ctx ctx, Ks_S
 
 // Try-Get pattern
 KS_API ks_bool ks_script_obj_try_as_number(Ks_Script_Ctx ctx, Ks_Script_Object obj, ks_double *out);
+KS_API ks_bool ks_script_obj_try_as_integer(Ks_Script_Ctx ctx, Ks_Script_Object obj, ks_int64* out);
 KS_API ks_bool ks_script_obj_try_as_boolean(Ks_Script_Ctx ctx, Ks_Script_Object obj, ks_bool *out);
 KS_API ks_bool ks_script_obj_try_as_cstring(Ks_Script_Ctx ctx, Ks_Script_Object obj, ks_str *out);
 KS_API ks_bool ks_script_obj_try_as_userdata(Ks_Script_Ctx ctx, Ks_Script_Object obj, Ks_UserData*out);

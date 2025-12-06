@@ -23,6 +23,14 @@ TEST_CASE("C API: Script Engine Suite") {
             CHECK(ks_script_obj_type(ctx, num) == KS_TYPE_DOUBLE);
             CHECK(ks_script_obj_as_number(ctx, num) == 123.456);
 
+            Ks_Script_Object integer = ks_script_create_integer(ctx, 9223372036854775807LL);
+            CHECK(ks_script_obj_type(ctx, integer) == KS_TYPE_INT);
+            ks_int64 val = ks_script_obj_as_integer(ctx, integer);
+            CHECK(val == 9223372036854775807LL);
+            ks_script_stack_push_integer(ctx, 12345);
+            ks_int64 popped = ks_script_stack_pop_integer(ctx);
+            CHECK(popped == 12345);
+
             Ks_Script_Object str = ks_script_create_cstring(ctx, "KeyStone");
             CHECK(ks_script_obj_type(ctx, str) == KS_TYPE_CSTRING);
             CHECK(strcmp(ks_script_obj_as_cstring(ctx, str), "KeyStone") == 0);
@@ -31,7 +39,17 @@ TEST_CASE("C API: Script Engine Suite") {
             CHECK(ks_script_obj_type(ctx, boolean) == KS_TYPE_BOOL);
             CHECK(ks_script_obj_as_boolean(ctx, boolean) == ks_true);
 
+
+
         } ks_script_end_scope(ctx);
+    }
+
+    SUBCASE("Integers") {
+        ks_script_begin_scope(ctx);
+
+        
+
+        ks_script_end_scope(ctx);
     }
 
     SUBCASE("Stack Manipulation") {

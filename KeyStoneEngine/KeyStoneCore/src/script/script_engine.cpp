@@ -42,7 +42,7 @@ struct KsUsertypeInstanceHandle {
 };
 
 static void* lua_custom_Alloc(void* ud, void* ptr, size_t osize, size_t nsize);
-static Ks_Type lua_type_to_ks(int type);
+static Ks_Type lua_type_to_ks(lua_State* L, int idx);
 static ks_str ks_metamethod_to_str(Ks_Script_Metamethod mt);
 static int universal_method_thunk(lua_State* L);
 static int usertype_gc_thunk(lua_State* L);
@@ -131,6 +131,15 @@ KS_API Ks_Script_Object ks_script_create_number(Ks_Script_Ctx ctx, ks_double val
     Ks_Script_Object obj;
     obj.type = KS_TYPE_DOUBLE;
     obj.val.number = val;
+    obj.state = KS_SCRIPT_OBJECT_VALID;
+    return obj;
+}
+
+Ks_Script_Object ks_script_create_integer(Ks_Script_Ctx ctx, ks_int64 val)
+{
+    Ks_Script_Object obj;
+    obj.type = KS_TYPE_INT;
+    obj.val.integer = val; 
     obj.state = KS_SCRIPT_OBJECT_VALID;
     return obj;
 }
@@ -924,6 +933,13 @@ KS_API ks_no_ret ks_script_stack_push_number(Ks_Script_Ctx ctx, ks_double val)
     lua_pushnumber(L, val);
 }
 
+ks_no_ret ks_script_stack_push_integer(Ks_Script_Ctx ctx, ks_int64 val)
+{
+    if (!ctx) return;
+    auto* sctx = static_cast<KsScriptEngineCtx*>(ctx);
+    lua_pushinteger(sctx->get_raw_state(), (lua_Integer)val);
+}
+
 KS_API ks_no_ret ks_script_stack_push_boolean(Ks_Script_Ctx ctx, ks_bool val)
 {
     if (!ctx) return;
@@ -962,13 +978,15 @@ KS_API ks_no_ret ks_script_stack_push_obj(Ks_Script_Ctx ctx, Ks_Script_Object va
     case KS_TYPE_CSTRING: {
         sctx->get_from_registry(val.val.string_ref);
     } break;
-    case KS_TYPE_DOUBLE:
-    case KS_TYPE_FLOAT:
     case KS_TYPE_INT:
     case KS_TYPE_UINT:
     case KS_TYPE_CHAR: {
+        lua_pushinteger(L, (lua_Integer)val.val.integer);
+    }break;
+    case KS_TYPE_DOUBLE:
+    case KS_TYPE_FLOAT: {
         lua_pushnumber(L, val.val.number);
-    } break;
+    }break;
     case KS_TYPE_BOOL: {
         lua_pushboolean(L, val.val.boolean);
     } break;
@@ -1000,6 +1018,18 @@ KS_API ks_double ks_script_stack_pop_number(Ks_Script_Ctx ctx)
 
     if (!lua_isnumber(L, -1)) return 0.0;
     ks_double val = lua_tonumber(L, -1);
+    lua_pop(L, 1);
+    return val;
+}
+
+ks_int64 ks_script_stack_pop_integer(Ks_Script_Ctx ctx)
+{
+    if (!ctx) return 0;
+    auto* sctx = static_cast<KsScriptEngineCtx*>(ctx);
+    lua_State* L = sctx->get_raw_state();
+
+    if (!lua_isinteger(L, -1) && !lua_isnumber(L, -1)) return 0;
+    ks_int64 val = (ks_int64)lua_tointeger(L, -1);
     lua_pop(L, 1);
     return val;
 }
@@ -1398,6 +1428,7 @@ KS_API Ks_Script_Object ks_script_stack_peek(Ks_Script_Ctx ctx, ks_stack_idx i)
     case LUA_TNIL:
         return ks_script_create_nil(ctx);
     case LUA_TNUMBER:
+        if (lua_isinteger(L, (int)i)) return ks_script_create_integer(ctx, lua_tointeger(L, (int)i));
         return ks_script_create_number(ctx, lua_tonumber(L, (int)i));
     case LUA_TBOOLEAN:
         return ks_script_create_boolean(ctx, lua_toboolean(L, (int)i));
@@ -1604,9 +1635,24 @@ KS_API ks_bool ks_script_obj_is(Ks_Script_Ctx ctx, Ks_Script_Object obj, Ks_Type
 }
 KS_API ks_double ks_script_obj_as_number(Ks_Script_Ctx ctx, Ks_Script_Object obj)
 {
-    if (obj.type != KS_TYPE_DOUBLE && obj.type != KS_TYPE_FLOAT &&
-        obj.type != KS_TYPE_INT && obj.type != KS_TYPE_UINT) return 0.0;
-    return obj.val.number;
+    if (obj.type == KS_TYPE_DOUBLE || obj.type == KS_TYPE_FLOAT) {
+        return obj.val.number;
+    }
+    if (obj.type == KS_TYPE_INT || obj.type == KS_TYPE_UINT || obj.type == KS_TYPE_CHAR) {
+        return (ks_double)obj.val.integer;
+    }
+    return 0.0;
+}
+
+ks_int64 ks_script_obj_as_integer(Ks_Script_Ctx ctx, Ks_Script_Object obj)
+{
+    if (obj.type == KS_TYPE_INT || obj.type == KS_TYPE_UINT || obj.type == KS_TYPE_CHAR) {
+        return obj.val.integer;
+    }
+    if (obj.type == KS_TYPE_DOUBLE || obj.type == KS_TYPE_FLOAT) {
+        return (ks_int64)obj.val.number;
+    }
+    return 0;
 }
 
 KS_API ks_bool ks_script_obj_as_boolean(Ks_Script_Ctx ctx, Ks_Script_Object obj)
@@ -1689,9 +1735,16 @@ KS_API Ks_Script_Coroutine ks_script_obj_as_coroutine(Ks_Script_Ctx ctx, Ks_Scri
 
 KS_API ks_double ks_script_obj_as_number_or(Ks_Script_Ctx ctx, Ks_Script_Object obj, ks_double def)
 {
-    if (obj.type != KS_TYPE_DOUBLE && obj.type != KS_TYPE_FLOAT &&
-        obj.type != KS_TYPE_INT && obj.type != KS_TYPE_UINT) return def;
-    return obj.val.number;
+    if (obj.type == KS_TYPE_DOUBLE || obj.type == KS_TYPE_FLOAT) return obj.val.number;
+    if (obj.type == KS_TYPE_INT || obj.type == KS_TYPE_UINT || obj.type == KS_TYPE_CHAR) return (ks_double)obj.val.integer;
+    return def;
+}
+
+ks_int64 ks_script_obj_as_integer_or(Ks_Script_Ctx ctx, Ks_Script_Object obj, ks_int64 def)
+{
+    if (obj.type == KS_TYPE_INT || obj.type == KS_TYPE_UINT) return obj.val.integer;
+    if (obj.type == KS_TYPE_DOUBLE) return (ks_int64)obj.val.number;
+    return def;
 }
 
 KS_API ks_bool ks_script_obj_as_boolean_or(Ks_Script_Ctx ctx, Ks_Script_Object obj, ks_bool def)
@@ -1736,6 +1789,19 @@ KS_API ks_bool ks_script_obj_try_as_number(Ks_Script_Ctx ctx, Ks_Script_Object o
         obj.type != KS_TYPE_INT && obj.type != KS_TYPE_UINT) return ks_false;
     *out = obj.val.number;
     return ks_true;
+}
+
+ks_bool ks_script_obj_try_as_integer(Ks_Script_Ctx ctx, Ks_Script_Object obj, ks_int64* out)
+{
+    if (obj.type == KS_TYPE_INT || obj.type == KS_TYPE_UINT) {
+        *out = obj.val.integer;
+        return ks_true;
+    }
+    if (obj.type == KS_TYPE_DOUBLE) {
+        *out = (ks_int64)obj.val.number;
+        return ks_true;
+    }
+    return ks_false;
 }
 
 KS_API ks_bool ks_script_obj_try_as_boolean(Ks_Script_Ctx ctx, Ks_Script_Object obj, ks_bool* out)
@@ -1929,11 +1995,14 @@ KS_API ks_str ks_script_obj_to_string(Ks_Script_Ctx ctx, Ks_Script_Object obj)
 }
 
 
-static Ks_Type lua_type_to_ks(int type) {
+static Ks_Type lua_type_to_ks(lua_State* L, int idx) {
+    int type = lua_type(L, idx);
     switch (type) {
     case -1: return KS_TYPE_UNKNOWN;
     case LUA_TNIL: return KS_TYPE_NIL;
-    case LUA_TNUMBER: return KS_TYPE_DOUBLE;
+    case LUA_TNUMBER: 
+        if (lua_isinteger(L, idx)) return KS_TYPE_INT;
+        return KS_TYPE_DOUBLE;
     case LUA_TSTRING: return KS_TYPE_CSTRING;
     case LUA_TBOOLEAN: return KS_TYPE_BOOL;
     case LUA_TTABLE: return KS_TYPE_SCRIPT_TABLE;

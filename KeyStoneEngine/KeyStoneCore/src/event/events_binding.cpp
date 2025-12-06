@@ -58,15 +58,15 @@ ks_returns_count l_events_register(Ks_Script_Ctx ctx) {
 
 ks_returns_count l_events_get(Ks_Script_Ctx ctx) {
     Ks_EventManager em = get_em(ctx);
-    const char* name = ks_script_obj_as_cstring(ctx, ks_script_get_arg(ctx, 1));
+    ks_str name = ks_script_obj_as_cstring(ctx, ks_script_get_arg(ctx, 1));
     Ks_Handle h = ks_event_manager_get_event_handle(em, name);
-    ks_script_stack_push_obj(ctx, ks_script_create_number(ctx, (double)h));
+    ks_script_stack_push_integer(ctx, (ks_int64)h);
     return 1;
 }
 
 ks_returns_count l_events_publish(Ks_Script_Ctx ctx) {
     Ks_EventManager em = get_em(ctx);
-    ks_double h_val = ks_script_obj_as_number(ctx, ks_script_get_arg(ctx, 1));
+    ks_int64 h_val = ks_script_obj_as_integer(ctx, ks_script_get_arg(ctx, 1));
     Ks_Handle evt = (Ks_Handle)h_val;
 
     ks_size sig_count = 0;
@@ -86,7 +86,10 @@ ks_returns_count l_events_publish(Ks_Script_Ctx ctx) {
 
         switch (expected) {
         case KS_TYPE_INT:
-            arg.i_val = (int)ks_script_obj_as_number(ctx, lua_arg);
+            arg.i_val = (int)ks_script_obj_as_integer(ctx, lua_arg);
+            break;
+        case KS_TYPE_UINT:
+            arg.ui_val = (ks_uint32)ks_script_obj_as_integer(ctx, lua_arg);
             break;
         case KS_TYPE_FLOAT:
             arg.f_val = (float)ks_script_obj_as_number(ctx, lua_arg);
@@ -159,7 +162,7 @@ ks_bool lua_subscriber_thunk(Ks_Event_Payload data, ks_ptr user_data) {
         Ks_Type type = ks_event_get_arg_type(data, i);
         switch (type) {
         case KS_TYPE_INT:
-            ks_script_stack_push_number(ctx, ks_event_get_int(data, i));
+            ks_script_stack_push_integer(ctx, ks_event_get_int(data, i));
             break;
         case KS_TYPE_FLOAT:
         case KS_TYPE_DOUBLE:

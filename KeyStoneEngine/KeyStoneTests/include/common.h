@@ -59,7 +59,7 @@ public:
 
 inline ks_returns_count entity_get_id(Ks_Script_Ctx ctx) {
     Entity* self = (Entity*)ks_script_get_self(ctx);
-    ks_script_stack_push_number(ctx, self ? self->id : 0);
+    ks_script_stack_push_integer(ctx, self ? self->id : 0);
     return 1;
 }
 
@@ -85,7 +85,7 @@ inline ks_returns_count hero_new_name(Ks_Script_Ctx ctx) {
 inline ks_returns_count hero_new_full(Ks_Script_Ctx ctx) {
     Hero* self = (Hero*)ks_script_get_self(ctx);
     const char* name = ks_script_obj_as_cstring(ctx, ks_script_get_arg(ctx, 1));
-    int hp = (int)ks_script_obj_as_number(ctx, ks_script_get_arg(ctx, 2));
+    int hp = (int)ks_script_obj_as_integer(ctx, ks_script_get_arg(ctx, 2));
     new(self) Hero(name ? name : "Unknown", hp);
     return 0;
 }
@@ -96,13 +96,13 @@ inline void hero_delete(ks_ptr data, ks_size size) {
 
 inline ks_returns_count hero_get_hp(Ks_Script_Ctx ctx) {
     Hero* self = (Hero*)ks_script_get_self(ctx);
-    ks_script_stack_push_number(ctx, self->hp);
+    ks_script_stack_push_integer(ctx, self->hp);
     return 1;
 }
 
 inline ks_returns_count hero_set_hp(Ks_Script_Ctx ctx) {
     Hero* self = (Hero*)ks_script_get_self(ctx);
-    int val = (int)ks_script_obj_as_number(ctx, ks_script_get_arg(ctx, 1));
+    int val = (int)ks_script_obj_as_integer(ctx, ks_script_get_arg(ctx, 1));
     if (val < 0) val = 0;
     self->hp = val;
     return 0;
@@ -111,22 +111,22 @@ inline ks_returns_count hero_set_hp(Ks_Script_Ctx ctx) {
 inline ks_returns_count hero_heal(Ks_Script_Ctx ctx) {
     Hero* self = (Hero*)ks_script_get_self(ctx);
     Ks_Script_Object amt = ks_script_get_arg(ctx, 1);
-    self->heal((int)ks_script_obj_as_number(ctx, amt));
+    self->heal((int)ks_script_obj_as_integer(ctx, amt));
     return 0;
 }
 
 inline ks_returns_count hero_attack_basic(Ks_Script_Ctx ctx) {
     Hero* self = (Hero*)ks_script_get_self(ctx);
     int dmg = self->attack();
-    ks_script_stack_push_obj(ctx, ks_script_create_number(ctx, dmg));
+    ks_script_stack_push_integer(ctx, dmg);
     return 1;
 }
 
 inline ks_returns_count hero_attack_strong(Ks_Script_Ctx ctx) {
     Hero* self = (Hero*)ks_script_get_self(ctx);
-    int input_dmg = (int)ks_script_obj_as_number(ctx, ks_script_get_arg(ctx, 1));
+    int input_dmg = (int)ks_script_obj_as_integer(ctx, ks_script_get_arg(ctx, 1));
     int dmg = self->attack_strong(input_dmg);
-    ks_script_stack_push_obj(ctx, ks_script_create_number(ctx, dmg));
+    ks_script_stack_push_integer(ctx, dmg);
     return 1;
 }
 

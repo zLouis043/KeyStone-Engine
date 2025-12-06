@@ -29,7 +29,7 @@ ks_returns_count l_assets_load(Ks_Script_Ctx ctx) {
         // handle = ks_assets_manager_load_asset_from_data(...)
     }
 
-    ks_script_stack_push_obj(ctx, ks_script_create_number(ctx, (double)handle));
+    ks_script_stack_push_integer(ctx, (ks_int64)handle);
     return 1;
 }
 
@@ -58,7 +58,7 @@ ks_returns_count l_assets_get(Ks_Script_Ctx ctx) {
 ks_returns_count l_assets_get_data(Ks_Script_Ctx ctx) {
     Ks_AssetsManager am = get_am_from_upvalue(ctx);
 
-    double h_val = ks_script_obj_as_number(ctx, ks_script_get_arg(ctx, 1));
+    ks_int64 h_val = ks_script_obj_as_integer(ctx, ks_script_get_arg(ctx, 1));
     Ks_Handle handle = (Ks_Handle)h_val;
 
     void* ptr = ks_assets_manager_get_data(am, handle);
