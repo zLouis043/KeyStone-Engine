@@ -106,7 +106,7 @@ TEST_CASE("C API: Script Engine Suite") {
                 };
 
             Ks_Script_Function func_obj = ks_script_create_cfunc(ctx,
-                KS_SCRIPT_FUNC(add_func, KS_SCRIPT_OBJECT_TYPE_NUMBER, KS_SCRIPT_OBJECT_TYPE_NUMBER)
+                KS_SCRIPT_FUNC(add_func, KS_TYPE_DOUBLE, KS_TYPE_DOUBLE)
             );
 
             CHECK(ks_script_obj_type(ctx, func_obj) == KS_SCRIPT_OBJECT_TYPE_FUNCTION);
@@ -264,7 +264,7 @@ TEST_CASE("C API: Script Engine Suite") {
             ks_script_usertype_set_destructor(b, hero_delete);
 
             ks_script_usertype_add_method(b, "heal",
-                KS_SCRIPT_FUNC(hero_heal, KS_SCRIPT_OBJECT_TYPE_NUMBER)
+                KS_SCRIPT_FUNC(hero_heal, KS_TYPE_DOUBLE)
             );
             ks_script_usertype_add_field(b, "hp", KS_TYPE_INT, offsetof(Hero, hp), nullptr);
 
@@ -395,19 +395,17 @@ TEST_CASE("C API: Script Engine Suite") {
             auto b_hero = ks_script_usertype_begin(ctx, T_HERO, sizeof(Hero));
             ks_script_usertype_inherits_from(b_hero, T_ENT);
 
-            Ks_Script_Object_Type args_name[] = { KS_SCRIPT_OBJECT_TYPE_STRING };
-            Ks_Script_Object_Type args_full[] = { KS_SCRIPT_OBJECT_TYPE_STRING, KS_SCRIPT_OBJECT_TYPE_NUMBER };
             ks_script_usertype_add_constructor(b_hero, KS_SCRIPT_OVERLOAD(
                 KS_SCRIPT_SIG_DEF_VOID(hero_new_void), 
-                KS_SCRIPT_SIG_DEF(hero_new_name, KS_SCRIPT_OBJECT_TYPE_STRING), 
-                KS_SCRIPT_SIG_DEF(hero_new_full, KS_SCRIPT_OBJECT_TYPE_STRING, KS_SCRIPT_OBJECT_TYPE_NUMBER)
+                KS_SCRIPT_SIG_DEF(hero_new_name, KS_TYPE_CSTRING), 
+                KS_SCRIPT_SIG_DEF(hero_new_full, KS_TYPE_CSTRING, KS_TYPE_DOUBLE)
             ));
             ks_script_usertype_set_destructor(b_hero, hero_delete);
 
 
             ks_script_usertype_add_method(b_hero, "attack", KS_SCRIPT_OVERLOAD(
                 KS_SCRIPT_SIG_DEF_VOID(hero_attack_basic),
-                KS_SCRIPT_SIG_DEF(hero_attack_strong, KS_SCRIPT_OBJECT_TYPE_NUMBER)
+                KS_SCRIPT_SIG_DEF(hero_attack_strong, KS_TYPE_DOUBLE)
             ));
 
             ks_script_usertype_add_field(b_hero, "hp", KS_TYPE_INT, offsetof(Hero, hp), nullptr);

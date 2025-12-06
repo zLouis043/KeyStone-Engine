@@ -141,18 +141,9 @@ typedef struct {
   ks_bool valid;
 } Ks_Script_Table_Iterator;
 
-/**
- * @brief Definition for an overloaded C function.
- */
-typedef struct {
-    ks_script_cfunc func;              ///< The C function to call.
-    Ks_Script_Object_Type* signature;  ///< Array of types defining the signature.
-    ks_size signature_len;             ///< Number of arguments in the signature.
-} Ks_Script_Overload_Def;
-
 typedef struct {
     ks_script_cfunc func;
-    const Ks_Script_Object_Type* args;
+    const Ks_Type* args;
     ks_size num_args;
 } Ks_Script_Sig_Def;
 
@@ -160,8 +151,8 @@ typedef struct {
 #define KS_SCRIPT_SIG_DEF(f, ...) \
     Ks_Script_Sig_Def{ \
         f, \
-        std::initializer_list<Ks_Script_Object_Type>{__VA_ARGS__}.begin(), \
-        std::initializer_list<Ks_Script_Object_Type>{__VA_ARGS__}.size() \
+        std::initializer_list<Ks_Type>{__VA_ARGS__}.begin(), \
+        std::initializer_list<Ks_Type>{__VA_ARGS__}.size() \
     }
 
 #define KS_SCRIPT_SIG_DEF_VOID(f) \
@@ -179,7 +170,7 @@ typedef struct {
 
 #else
 #define KS_SCRIPT_SIG_DEF(f, ...) \
-    (Ks_Script_Sig_Def){ .func = f, .args = (const Ks_Script_Object_Type[]){__VA_ARGS__}, .num_args = ... } 
+    (Ks_Script_Sig_Def){ .func = f, .args = (const Ks_Type[]){__VA_ARGS__}, .num_args = ... } 
 
 #define KS_SCRIPT_SIG_DEF_VOID(f) \
     (Ks_Script_Sig_Def){ .func = f, .args = nullptr, .num_args = 0 }

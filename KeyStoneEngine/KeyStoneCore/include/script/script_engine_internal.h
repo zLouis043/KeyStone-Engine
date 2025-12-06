@@ -174,7 +174,7 @@ private:
 struct MethodInfo {
 	std::string name;
 	ks_script_cfunc func;
-	std::vector<Ks_Script_Object_Type> signature;
+	std::vector<Ks_Type> signature;
 };
 
 struct PropertyInfo {

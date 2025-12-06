@@ -14,5 +14,8 @@ KS_API ks_no_ret ks_types_lua_bind(Ks_Script_Ctx ctx) {
         ks_script_table_set(ctx, types_tbl, ks_script_create_cstring(ctx, "PTR"), ks_script_create_number(ctx, KS_TYPE_PTR));
         ks_script_table_set(ctx, types_tbl, ks_script_create_cstring(ctx, "USERDATA"), ks_script_create_number(ctx, KS_TYPE_USERDATA));
         ks_script_table_set(ctx, types_tbl, ks_script_create_cstring(ctx, "TABLE"), ks_script_create_number(ctx, KS_TYPE_SCRIPT_TABLE));
+        ks_script_table_set(ctx, types_tbl, ks_script_create_cstring(ctx, "FUNCTION"), ks_script_create_number(ctx, KS_TYPE_SCRIPT_FUNCTION));
+        ks_script_table_set(ctx, types_tbl, ks_script_create_cstring(ctx, "COROUTINE"), ks_script_create_number(ctx, KS_TYPE_SCRIPT_COROUTINE));
+        ks_script_table_set(ctx, types_tbl, ks_script_create_cstring(ctx, "ANY"), ks_script_create_number(ctx, KS_TYPE_SCRIPT_ANY));
     }ks_script_end_scope(ctx);
 }

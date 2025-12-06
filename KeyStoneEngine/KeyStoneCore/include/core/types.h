@@ -61,7 +61,10 @@ typedef enum Ks_Type {
 	KS_TYPE_LSTRING,
 	KS_TYPE_PTR,
 	KS_TYPE_USERDATA,
-	KS_TYPE_SCRIPT_TABLE
+	KS_TYPE_SCRIPT_TABLE,
+	KS_TYPE_SCRIPT_FUNCTION,
+	KS_TYPE_SCRIPT_COROUTINE,
+	KS_TYPE_SCRIPT_ANY
 } Ks_Type;
 
 typedef struct Ks_LStr {
@@ -76,4 +79,5 @@ typedef struct Ks_UserData {
 
 #define KS_LSTR(str, len) Ks_LStr { str, len }
 #define KS_USERDATA(data) Ks_UserData { &data, sizeof(data) }
+#define KS_USERDATA_SZ(data, size) Ks_UserData { &data, size }
 
