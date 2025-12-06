@@ -715,7 +715,7 @@ ks_ptr ks_script_get_self(Ks_Script_Ctx ctx)
     auto* sctx = static_cast<KsScriptEngineCtx*>(ctx);
     lua_State* L = sctx->get_raw_state();
 
-    auto* handle = new(lua_touserdata(L, 1)) KsUsertypeInstanceHandle();
+    auto* handle = static_cast<KsUsertypeInstanceHandle*>(lua_touserdata(L, 1));
     if (!handle) return nullptr;
 
     return handle->instance;
@@ -734,7 +734,7 @@ ks_ptr ks_script_usertype_get_ptr(Ks_Script_Ctx ctx, Ks_Script_Object obj)
         return nullptr;
     }
 
-    auto* handle = new(lua_touserdata(L, -1)) KsUsertypeInstanceHandle();
+    auto* handle = static_cast<KsUsertypeInstanceHandle*>(lua_touserdata(L, -1));
     void* instance = handle ? handle->instance : nullptr;
 
     lua_pop(L, 1);
@@ -756,7 +756,7 @@ Ks_UserData ks_script_usertype_get_body(Ks_Script_Ctx ctx, Ks_Script_Object obj)
         return result;
     }
 
-    auto* handle = new(lua_touserdata(L, -1)) KsUsertypeInstanceHandle();
+    auto* handle = static_cast<KsUsertypeInstanceHandle*>(lua_touserdata(L, -1));
     
     result.data = handle->instance;
     result.size = handle->size;
@@ -2478,7 +2478,7 @@ static const char* ks_metamethod_to_str(Ks_Script_Metamethod mt) {
 
 static int usertype_gc_thunk(lua_State* L) {
 
-    auto* handle = new(lua_touserdata(L, 1)) KsUsertypeInstanceHandle();
+    auto* handle = static_cast<KsUsertypeInstanceHandle*>(lua_touserdata(L, 1));
 
     if (!handle || handle->is_borrowed) return 0;
 
@@ -2619,7 +2619,7 @@ static int overload_dispatcher_thunk(lua_State* L) {
             size_t total_size = sizeof(KsUsertypeInstanceHandle) + size;
             void* raw_mem = lua_newuserdatauv(L, total_size, 0);
 
-            auto* handle = new(raw_mem) KsUsertypeInstanceHandle();
+            auto* handle = new(raw_mem) KsUsertypeInstanceHandle()
             handle->instance = static_cast<ks_byte*>(raw_mem) + sizeof(KsUsertypeInstanceHandle);
             handle->size = size;
             handle->is_borrowed = false;
@@ -2802,7 +2802,7 @@ static void save_usertype_table(lua_State* L, int table_idx, const std::string& 
 }
 
 static int usertype_field_getter_thunk(lua_State* L) {
-    auto* handle = new(lua_touserdata(L, 1)) KsUsertypeInstanceHandle();
+    auto* handle = static_cast<KsUsertypeInstanceHandle*>(lua_touserdata(L, 1));
     if (!handle || !handle->instance) return 0;
 
     ks_size offset = (ks_size)lua_tointeger(L, lua_upvalueindex(1));
@@ -2820,9 +2820,9 @@ static int usertype_field_getter_thunk(lua_State* L) {
     case KS_TYPE_USERDATA: {
         const char* type_name = lua_tostring(L, lua_upvalueindex(3));
 
-        auto* sub_handle = static_cast<KsUsertypeInstanceHandle*>(
-            lua_newuserdatauv(L, sizeof(KsUsertypeInstanceHandle), 0)
-            );
+        void* raw_mem = lua_newuserdatauv(L, sizeof(KsUsertypeInstanceHandle), 0);
+        
+        auto* sub_handle = new (raw_mem) KsUsertypeInstanceHandle();
 
         sub_handle->instance = field_ptr;
         sub_handle->size = 0;
@@ -2837,7 +2837,7 @@ static int usertype_field_getter_thunk(lua_State* L) {
 }
 
 static int usertype_field_setter_thunk(lua_State* L) {
-    auto* handle = new(lua_touserdata(L, 1)) KsUsertypeInstanceHandle();
+    auto* handle = static_cast<KsUsertypeInstanceHandle*>(lua_touserdata(L, 1));
     if (!handle || !handle->instance) return luaL_error(L, "Invalid instance");
 
     ks_size offset = (ks_size)lua_tointeger(L, lua_upvalueindex(1));
