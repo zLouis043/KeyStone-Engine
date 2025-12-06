@@ -39,6 +39,7 @@ struct AutoCallFrame {
 
 struct KsUsertypeInstanceHandle {
     void* instance;
+    ks_size size;
     bool is_borrowed;
 };
 
@@ -337,6 +338,7 @@ Ks_Script_Userdata ks_script_create_usertype_instance(Ks_Script_Ctx ctx, ks_str 
     auto* handle = static_cast<KsUsertypeInstanceHandle*>(raw_mem);
 
     handle->instance = static_cast<uint8_t*>(raw_mem) + sizeof(KsUsertypeInstanceHandle);
+    handle->size = instance_size;
     handle->is_borrowed = false;
 
     luaL_setmetatable(L, type_name);
@@ -357,6 +359,7 @@ Ks_Script_Object ks_script_create_usertype_ref(Ks_Script_Ctx ctx, ks_str type_na
     auto* handle = static_cast<KsUsertypeInstanceHandle*>(lua_newuserdatauv(L, sizeof(KsUsertypeInstanceHandle), 0));
 
     handle->instance = ptr;
+    handle->size = 0;
     handle->is_borrowed = true; 
 
     luaL_setmetatable(L, type_name);
@@ -752,17 +755,9 @@ Ks_UserData ks_script_usertype_get_body(Ks_Script_Ctx ctx, Ks_Script_Object obj)
     }
 
     auto* handle = static_cast<KsUsertypeInstanceHandle*>(lua_touserdata(L, -1));
-    size_t total_size = lua_rawlen(L, -1);
-    size_t handle_size = sizeof(KsUsertypeInstanceHandle);
-
-    if (total_size > handle_size) {
-        result.data = handle->instance;
-        result.size = total_size - handle_size;
-    }
-    else {
-        result.data = handle->instance;
-        result.size = 0; 
-    }
+    
+    result.data = handle->instance;
+    result.size = handle->size;
 
     lua_pop(L, 1);
     return result;
@@ -2555,6 +2550,7 @@ static int usertype_auto_constructor_thunk(lua_State* L) {
 
     auto* handle = static_cast<KsUsertypeInstanceHandle*>(raw_mem);
     handle->instance = static_cast<ks_byte*>(raw_mem) + sizeof(KsUsertypeInstanceHandle);
+    handle->size = size;
     handle->is_borrowed = false;
 
     luaL_setmetatable(L, type_name);
@@ -2623,6 +2619,7 @@ static int overload_dispatcher_thunk(lua_State* L) {
 
             auto* handle = static_cast<KsUsertypeInstanceHandle*>(raw_mem);
             handle->instance = static_cast<ks_byte*>(raw_mem) + sizeof(KsUsertypeInstanceHandle);
+            handle->size = size;
             handle->is_borrowed = false;
             luaL_setmetatable(L, tname);
             lua_insert(L, 1);
@@ -2826,6 +2823,7 @@ static int usertype_field_getter_thunk(lua_State* L) {
             );
 
         sub_handle->instance = field_ptr;
+        sub_handle->size = 0;
         sub_handle->is_borrowed = true; 
 
         luaL_setmetatable(L, type_name);
