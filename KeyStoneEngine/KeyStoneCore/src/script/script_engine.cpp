@@ -753,22 +753,15 @@ Ks_UserData ks_script_usertype_get_body(Ks_Script_Ctx ctx, Ks_Script_Object obj)
 
     auto* handle = static_cast<KsUsertypeInstanceHandle*>(lua_touserdata(L, -1));
     size_t total_size = lua_rawlen(L, -1);
+    size_t handle_size = sizeof(KsUsertypeInstanceHandle);
 
-    if (handle->is_borrowed) {
+    if (total_size > handle_size) {
+        result.data = handle->instance;
+        result.size = total_size - handle_size;
+    }
+    else {
         result.data = handle->instance;
         result.size = 0; 
-    }
-
-    else {
-        char* start_ptr = reinterpret_cast<char*>(handle);
-        char* data_ptr = reinterpret_cast<char*>(handle->instance);
-        
-        ptrdiff_t header_size = data_ptr - start_ptr;
-
-        if (header_size > 0 && total_size > static_cast<size_t>(header_size)) {
-            result.data = handle->instance;
-            result.size = total_size - static_cast<size_t>(header_size);
-        }
     }
 
     lua_pop(L, 1);
