@@ -58,22 +58,6 @@ typedef enum {
 } Ks_Script_Object_State;
 
 /**
- * @brief Supported object types in the scripting system.
- */
-typedef enum {
-  KS_SCRIPT_OBJECT_TYPE_UNKNOWN,
-  KS_SCRIPT_OBJECT_TYPE_NIL,
-  KS_SCRIPT_OBJECT_TYPE_STRING,
-  KS_SCRIPT_OBJECT_TYPE_NUMBER,
-  KS_SCRIPT_OBJECT_TYPE_BOOLEAN,
-  KS_SCRIPT_OBJECT_TYPE_TABLE,
-  KS_SCRIPT_OBJECT_TYPE_FUNCTION,
-  KS_SCRIPT_OBJECT_TYPE_COROUTINE,
-  KS_SCRIPT_OBJECT_TYPE_USERDATA,
-  KS_SCRIPT_OBJECT_TYPE_LIGHTUSERDATA
-} Ks_Script_Object_Type;
-
-/**
  * @brief Generic wrapper for script objects passed between C++ and the script engine.
  */
 typedef struct {
@@ -89,7 +73,7 @@ typedef struct {
     Ks_Script_Ref generic_ref;
   } val;
   Ks_Script_Object_State state;
-  Ks_Script_Object_Type type;
+  Ks_Type type;
 } Ks_Script_Object;
 
 // Typedef aliases for semantic clarity
@@ -141,6 +125,14 @@ typedef struct {
   ks_bool valid;
 } Ks_Script_Table_Iterator;
 
+/* ================================================================================== */
+/* FUNCTION BINDING MACRO SYSTEM                             */
+/* ================================================================================== */
+
+/**
+ * @brief Defines a signature for a C function binding.
+ */
+
 typedef struct {
     ks_script_cfunc func;
     const Ks_Type* args;
@@ -148,6 +140,9 @@ typedef struct {
 } Ks_Script_Sig_Def;
 
 #ifdef __cplusplus
+// C++ Implementation using std::initializer_list for stack-safe arrays
+
+/** @brief Defines a signature with explicit argument types. */
 #define KS_SCRIPT_SIG_DEF(f, ...) \
     Ks_Script_Sig_Def{ \
         f, \
@@ -155,20 +150,26 @@ typedef struct {
         std::initializer_list<Ks_Type>{__VA_ARGS__}.size() \
     }
 
+/** @brief Defines a signature for a function taking no arguments (void). */
 #define KS_SCRIPT_SIG_DEF_VOID(f) \
     Ks_Script_Sig_Def{ f, nullptr, 0 }
 
+/** @brief Wraps a single function into a method list. */
 #define KS_SCRIPT_FUNC(f, ...) \
     std::initializer_list<Ks_Script_Sig_Def>{ KS_SCRIPT_SIG_DEF(f, __VA_ARGS__) }.begin(), 1
 
+/** @brief Wraps a single void function into a method list. */
 #define KS_SCRIPT_FUNC_VOID(f) \
     std::initializer_list<Ks_Script_Sig_Def>{ KS_SCRIPT_SIG_DEF_VOID(f) }.begin(), 1
 
+/** @brief Wraps multiple signatures for overloading. */
 #define KS_SCRIPT_OVERLOAD(...) \
     std::initializer_list<Ks_Script_Sig_Def>{__VA_ARGS__}.begin(), \
     std::initializer_list<Ks_Script_Sig_Def>{__VA_ARGS__}.size()
 
 #else
+// C Implementation using Compound Literals
+
 #define KS_SCRIPT_SIG_DEF(f, ...) \
     (Ks_Script_Sig_Def){ .func = f, .args = (const Ks_Type[]){__VA_ARGS__}, .num_args = ... } 
 
@@ -326,12 +327,12 @@ KS_API ks_no_ret ks_script_set_global(Ks_Script_Ctx ctx, ks_str name,
 KS_API Ks_Script_Object ks_script_get_global(Ks_Script_Ctx ctx, ks_str name);
 
 /** @brief Loads a script from a string (compiles it). */
-KS_API Ks_Script_Function ks_script_load_string(Ks_Script_Ctx ctx, ks_str string);
+KS_API Ks_Script_Function ks_script_load_cstring(Ks_Script_Ctx ctx, ks_str string);
 /** @brief Loads a script from a file (compiles it). */
 KS_API Ks_Script_Function ks_script_load_file(Ks_Script_Ctx ctx, ks_str file_path);
 
 /** @brief Executes a script string and returns the result(s). */
-KS_API Ks_Script_Function_Call_Result ks_script_do_string(Ks_Script_Ctx ctx,
+KS_API Ks_Script_Function_Call_Result ks_script_do_cstring(Ks_Script_Ctx ctx,
                                                    ks_str string);
 /** @brief Executes a script file and returns the result(s). */
 KS_API Ks_Script_Function_Call_Result ks_script_do_file(Ks_Script_Ctx ctx,
@@ -381,12 +382,13 @@ KS_API ks_no_ret ks_script_stack_copy(Ks_Script_Ctx ctx, ks_stack_idx from, ks_s
 KS_API ks_no_ret ks_script_stack_dump(Ks_Script_Ctx ctx);
 
 /* --- Type Checking & Conversions --- */
-KS_API Ks_Script_Object_Type ks_script_obj_type(Ks_Script_Ctx ctx, Ks_Script_Object obj);
+KS_API Ks_Type ks_script_obj_type(Ks_Script_Ctx ctx, Ks_Script_Object obj);
 KS_API ks_bool ks_script_obj_is_valid(Ks_Script_Ctx ctx, Ks_Script_Object obj);
-KS_API ks_bool ks_script_obj_is(Ks_Script_Ctx ctx, Ks_Script_Object obj, Ks_Script_Object_Type type);
+KS_API ks_bool ks_script_obj_is(Ks_Script_Ctx ctx, Ks_Script_Object obj, Ks_Type type);
 KS_API ks_double ks_script_obj_as_number(Ks_Script_Ctx ctx, Ks_Script_Object obj);
 KS_API ks_bool ks_script_obj_as_boolean(Ks_Script_Ctx ctx, Ks_Script_Object obj);
-KS_API ks_str ks_script_obj_as_str(Ks_Script_Ctx ctx, Ks_Script_Object obj);
+KS_API ks_str ks_script_obj_as_cstring(Ks_Script_Ctx ctx, Ks_Script_Object obj);
+KS_API Ks_UserData ks_script_obj_as_userdata(Ks_Script_Ctx ctx, Ks_Script_Object obj);
 KS_API Ks_Script_Table ks_script_obj_as_table(Ks_Script_Ctx ctx, Ks_Script_Object obj);
 KS_API Ks_Script_Function ks_script_obj_as_function(Ks_Script_Ctx ctx, Ks_Script_Object obj);
 KS_API Ks_Script_Coroutine ks_script_obj_as_coroutine(Ks_Script_Ctx ctx, Ks_Script_Object obj);
@@ -394,7 +396,8 @@ KS_API Ks_Script_Coroutine ks_script_obj_as_coroutine(Ks_Script_Ctx ctx, Ks_Scri
 // Safe conversions with default values
 KS_API ks_double ks_script_obj_as_number_or(Ks_Script_Ctx ctx, Ks_Script_Object obj, ks_double def);
 KS_API ks_bool ks_script_obj_as_boolean_or(Ks_Script_Ctx ctx, Ks_Script_Object obj, ks_bool def);
-KS_API ks_str ks_script_obj_as_str_or(Ks_Script_Ctx ctx, Ks_Script_Object obj, ks_str def);
+KS_API ks_str ks_script_obj_as_cstring_or(Ks_Script_Ctx ctx, Ks_Script_Object obj, ks_str def);
+KS_API Ks_UserData ks_script_obj_as_userdata_or(Ks_Script_Ctx ctx, Ks_Script_Object obj, Ks_UserData def);
 KS_API Ks_Script_Table ks_script_obj_as_table_or(Ks_Script_Ctx ctx, Ks_Script_Object obj, Ks_Script_Table def);
 KS_API Ks_Script_Function ks_script_as_function_or(Ks_Script_Ctx ctx, Ks_Script_Object obj, Ks_Script_Function def);
 KS_API Ks_Script_Coroutine ks_script_obj_as_coroutine_or(Ks_Script_Ctx ctx, Ks_Script_Object obj, Ks_Script_Coroutine def);
@@ -402,7 +405,8 @@ KS_API Ks_Script_Coroutine ks_script_obj_as_coroutine_or(Ks_Script_Ctx ctx, Ks_S
 // Try-Get pattern
 KS_API ks_bool ks_script_obj_try_as_number(Ks_Script_Ctx ctx, Ks_Script_Object obj, ks_double *out);
 KS_API ks_bool ks_script_obj_try_as_boolean(Ks_Script_Ctx ctx, Ks_Script_Object obj, ks_bool *out);
-KS_API ks_bool ks_script_obj_try_as_string(Ks_Script_Ctx ctx, Ks_Script_Object obj, ks_str *out);
+KS_API ks_bool ks_script_obj_try_as_cstring(Ks_Script_Ctx ctx, Ks_Script_Object obj, ks_str *out);
+KS_API ks_bool ks_script_obj_try_as_userdata(Ks_Script_Ctx ctx, Ks_Script_Object obj, Ks_UserData*out);
 KS_API ks_bool ks_script_obj_try_as_table(Ks_Script_Ctx ctx, Ks_Script_Object obj, Ks_Script_Table *out);
 KS_API ks_bool ks_script_obj_try_as_function(Ks_Script_Ctx ctx, Ks_Script_Object obj, Ks_Script_Function *out);
 KS_API ks_bool ks_script_obj_try_as_coroutine(Ks_Script_Ctx ctx, Ks_Script_Object obj, Ks_Script_Coroutine *out);
@@ -514,14 +518,40 @@ KS_API Ks_Script_Userytype_Builder ks_script_usertype_begin(Ks_Script_Ctx ctx, k
 
 KS_API ks_no_ret ks_script_usertype_inherits_from(Ks_Script_Userytype_Builder builder, ks_str base_type_name);
 
+/**
+ * @brief Registers constructor(s).
+ * Use KS_SCRIPT_OVERLOAD for multiple constructors.
+ */
 KS_API ks_no_ret ks_script_usertype_add_constructor(Ks_Script_Userytype_Builder builder, const Ks_Script_Sig_Def* sigs, ks_size count);
+
+/** @brief Sets the destructor/finalizer. */
 KS_API ks_no_ret ks_script_usertype_set_destructor(Ks_Script_Userytype_Builder builder, ks_script_deallocator dtor);
 
+/** 
+ * @brief Registers instance methods. 
+ * Use KS_SCRIPT_OVERLOAD for multiple constructors. 
+*/
 KS_API ks_no_ret ks_script_usertype_add_method(Ks_Script_Userytype_Builder builder, ks_str name, const Ks_Script_Sig_Def* sigs, ks_size count);
+
+/**
+ * @brief Registers static methods.
+ * Use KS_SCRIPT_OVERLOAD for multiple constructors.
+*/
 KS_API ks_no_ret ks_script_usertype_add_static_method(Ks_Script_Userytype_Builder builder, ks_str name, const Ks_Script_Sig_Def* sigs, ks_size count);
+
+/**
+ * @brief Registers a Field (Direct Memory Access).
+ * @note Use this for POD types and raw data members. Fast.
+ */
 KS_API ks_no_ret ks_script_usertype_add_field(Ks_Script_Userytype_Builder builder, ks_str name, Ks_Type type, ks_size offset, ks_str type_alias);
+
+/**
+ * @brief Registers a Property (Getter/Setter pair).
+ * @note Use this for complex logic, validation, or virtual/polymorphic classes.
+ */
 KS_API ks_no_ret ks_script_usertype_add_property(Ks_Script_Userytype_Builder builder, ks_str name, ks_script_cfunc getter, ks_script_cfunc setter);
 
+/** @brief Registers Lua metamethods (e.g., __add, __tostring). */
 KS_API ks_no_ret ks_script_usertype_add_metamethod(Ks_Script_Userytype_Builder builder, Ks_Script_Metamethod mt, ks_script_cfunc func);
 
 /**

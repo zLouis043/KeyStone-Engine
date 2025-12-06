@@ -38,7 +38,7 @@ static Ks_EventManager get_em(Ks_Script_Ctx ctx) {
 
 ks_returns_count l_events_register(Ks_Script_Ctx ctx) {
     Ks_EventManager em = get_em(ctx);
-    const char* name = ks_script_obj_as_str(ctx, ks_script_get_arg(ctx, 1));
+    const char* name = ks_script_obj_as_cstring(ctx, ks_script_get_arg(ctx, 1));
     Ks_Script_Table types_tbl = ks_script_obj_as_table(ctx, ks_script_get_arg(ctx, 2));
 
     std::vector<Ks_Type> types;
@@ -58,7 +58,7 @@ ks_returns_count l_events_register(Ks_Script_Ctx ctx) {
 
 ks_returns_count l_events_get(Ks_Script_Ctx ctx) {
     Ks_EventManager em = get_em(ctx);
-    const char* name = ks_script_obj_as_str(ctx, ks_script_get_arg(ctx, 1));
+    const char* name = ks_script_obj_as_cstring(ctx, ks_script_get_arg(ctx, 1));
     Ks_Handle h = ks_event_manager_get_event_handle(em, name);
     ks_script_stack_push_obj(ctx, ks_script_create_number(ctx, (double)h));
     return 1;
@@ -98,7 +98,7 @@ ks_returns_count l_events_publish(Ks_Script_Ctx ctx) {
             arg.b_val = ks_script_obj_as_boolean(ctx, lua_arg);
             break;
         case KS_TYPE_CSTRING: {
-            ks_str s = ks_script_obj_as_str(ctx, lua_arg);
+            ks_str s = ks_script_obj_as_cstring(ctx, lua_arg);
             if (s) {
                 ks_size len = strlen(s) + 1;
                 arg.buffer.resize(len);
@@ -106,7 +106,7 @@ ks_returns_count l_events_publish(Ks_Script_Ctx ctx) {
             }
         } break;
         case KS_TYPE_SCRIPT_TABLE:
-            if (lua_arg.type == KS_SCRIPT_OBJECT_TYPE_TABLE) {
+            if (lua_arg.type == KS_TYPE_SCRIPT_TABLE) {
                 arg.t_val = ks_script_obj_as_table(ctx, lua_arg);
             }
             else {
@@ -114,18 +114,17 @@ ks_returns_count l_events_publish(Ks_Script_Ctx ctx) {
             }
             break;
         case KS_TYPE_USERDATA:
-            if (lua_arg.type == KS_SCRIPT_OBJECT_TYPE_USERDATA) {
-                ks_ptr ptr = ks_script_userdata_get_ptr(ctx, lua_arg);
-                ks_size size = ks_script_userdata_get_size(ctx, lua_arg);
-                arg.buffer.resize(size);
-                memcpy(arg.buffer.data(), ptr, size);
+            if (lua_arg.type == KS_TYPE_USERDATA) {
+                Ks_UserData ud = ks_script_obj_as_userdata(ctx, lua_arg);
+                arg.buffer.resize(ud.size);
+                memcpy(arg.buffer.data(), ud.data, ud.size);
             }
             break;
         case KS_TYPE_PTR: {
-            if (lua_arg.type == KS_SCRIPT_OBJECT_TYPE_USERDATA) {
+            if (lua_arg.type == KS_TYPE_USERDATA) {
                 arg.p_val = ks_script_userdata_get_ptr(ctx, lua_arg);
             }
-            else if (lua_arg.type == KS_SCRIPT_OBJECT_TYPE_LIGHTUSERDATA) {
+            else if (lua_arg.type == KS_TYPE_LIGHTUSERDATA) {
                 arg.p_val = lua_arg.val.lightuserdata;
             }
         } break;
@@ -150,7 +149,7 @@ ks_bool lua_subscriber_thunk(Ks_Event_Payload data, ks_ptr user_data) {
     Ks_Script_Ctx ctx = info->ctx;
 
     Ks_Script_Object func_obj;
-    func_obj.type = KS_SCRIPT_OBJECT_TYPE_FUNCTION;
+    func_obj.type = KS_TYPE_SCRIPT_FUNCTION;
     func_obj.val.function_ref = info->func_ref;
     func_obj.state = KS_SCRIPT_OBJECT_VALID;
 

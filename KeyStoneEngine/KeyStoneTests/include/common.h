@@ -28,7 +28,7 @@ inline Ks_AssetData my_asset_load_file(ks_str file_path) {
     return (Ks_AssetData)asset;
 }
 
-inline Ks_AssetData my_asset_load_data(const ks_byte* data) {
+inline Ks_AssetData my_asset_load_data(const Ks_UserData data) {
     MyCAsset* asset = (MyCAsset*)ks_alloc(sizeof(MyCAsset), KS_LT_USER_MANAGED, KS_TAG_RESOURCE);
     if (!asset) return KS_INVALID_ASSET_DATA;
     asset->id = 200;
@@ -77,14 +77,14 @@ inline ks_returns_count hero_new_void(Ks_Script_Ctx ctx) {
 
 inline ks_returns_count hero_new_name(Ks_Script_Ctx ctx) {
     Hero* self = (Hero*)ks_script_get_self(ctx);
-    const char* name = ks_script_obj_as_str(ctx, ks_script_get_arg(ctx, 1));
+    const char* name = ks_script_obj_as_cstring(ctx, ks_script_get_arg(ctx, 1));
     new(self) Hero(name ? name : "Unknown", 100);
     return 0;
 }
 
 inline ks_returns_count hero_new_full(Ks_Script_Ctx ctx) {
     Hero* self = (Hero*)ks_script_get_self(ctx);
-    const char* name = ks_script_obj_as_str(ctx, ks_script_get_arg(ctx, 1));
+    const char* name = ks_script_obj_as_cstring(ctx, ks_script_get_arg(ctx, 1));
     int hp = (int)ks_script_obj_as_number(ctx, ks_script_get_arg(ctx, 2));
     new(self) Hero(name ? name : "Unknown", hp);
     return 0;

@@ -72,7 +72,7 @@ KS_API Ks_Handle ks_assets_manager_load_asset_from_file(
  */
 KS_API Ks_Handle ks_assets_manager_load_asset_from_data(
     Ks_AssetsManager am, ks_str type_name, ks_str asset_name,
-    const ks_byte  *data);
+    const Ks_UserData data);
 
 /**
  * @brief Retrieves a handle to an already loaded asset by name.

@@ -174,13 +174,6 @@ public:
                     memcpy(arg.buffer.data(), s, len);
                 }
             } break;
-            case KS_TYPE_LSTRING: {
-                Ks_LStr s = (Ks_LStr)va_arg(args, Ks_LStr);
-                if (s.data) {
-                    arg.buffer.resize(s.len);
-                    memcpy(arg.buffer.data(), s.data, s.len);
-                }
-            } break;
             case KS_TYPE_PTR: {
                 ks_ptr p = (ks_ptr)va_arg(args, ks_ptr);
                 arg.p_val = p;
@@ -331,17 +324,6 @@ KS_API ks_str ks_event_get_cstring(Ks_Event_Payload data, ks_size index) {
     if (index < p->args.size() && p->args[index].type == KS_TYPE_CSTRING)
         return (const char*)p->args[index].buffer.data();
     return "";
-}
-
-KS_API Ks_LStr ks_event_get_lstring(Ks_Event_Payload data, ks_size index) {
-    auto* p = GET_PAYLOAD(data);
-    if (index < p->args.size() && p->args[index].type == KS_TYPE_LSTRING){
-        Ks_LStr str;
-        str.data = (ks_str)p->args[index].buffer.data();
-        str.len = p->args[index].buffer.size();
-        return str;
-    }
-    return Ks_LStr{0};
 }
 
 KS_API ks_ptr ks_event_get_ptr(Ks_Event_Payload data, ks_size index) {

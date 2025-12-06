@@ -238,7 +238,7 @@ KS_API Ks_Handle ks_assets_manager_load_asset_from_file(Ks_AssetsManager am, ks_
 	return handle;
 }
 
-KS_API Ks_Handle ks_assets_manager_load_asset_from_data(Ks_AssetsManager am, ks_str type_name, ks_str asset_name, const ks_byte* data)
+KS_API Ks_Handle ks_assets_manager_load_asset_from_data(Ks_AssetsManager am, ks_str type_name, ks_str asset_name, const Ks_UserData data)
 {
 	AssetManager_Impl* iam = static_cast<AssetManager_Impl*>(am.impl);
 

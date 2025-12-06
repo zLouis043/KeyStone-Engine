@@ -15,20 +15,20 @@ TEST_CASE("C API: Script Engine Suite") {
     SUBCASE("Basics: Primitives & Execution") {
         ks_script_begin_scope(ctx); {
 
-            Ks_Script_Function_Call_Result res = ks_script_do_string(ctx, "return 42");
+            Ks_Script_Function_Call_Result res = ks_script_do_cstring(ctx, "return 42");
             CHECK(ks_script_call_succeded(ctx, res));
             CHECK(ks_script_obj_as_number(ctx, ks_script_call_get_return(ctx, res)) == 42.0);
 
             Ks_Script_Object num = ks_script_create_number(ctx, 123.456);
-            CHECK(ks_script_obj_type(ctx, num) == KS_SCRIPT_OBJECT_TYPE_NUMBER);
+            CHECK(ks_script_obj_type(ctx, num) == KS_TYPE_DOUBLE);
             CHECK(ks_script_obj_as_number(ctx, num) == 123.456);
 
             Ks_Script_Object str = ks_script_create_cstring(ctx, "KeyStone");
-            CHECK(ks_script_obj_type(ctx, str) == KS_SCRIPT_OBJECT_TYPE_STRING);
-            CHECK(strcmp(ks_script_obj_as_str(ctx, str), "KeyStone") == 0);
+            CHECK(ks_script_obj_type(ctx, str) == KS_TYPE_CSTRING);
+            CHECK(strcmp(ks_script_obj_as_cstring(ctx, str), "KeyStone") == 0);
 
             Ks_Script_Object boolean = ks_script_create_boolean(ctx, ks_true);
-            CHECK(ks_script_obj_type(ctx, boolean) == KS_SCRIPT_OBJECT_TYPE_BOOLEAN);
+            CHECK(ks_script_obj_type(ctx, boolean) == KS_TYPE_BOOL);
             CHECK(ks_script_obj_as_boolean(ctx, boolean) == ks_true);
 
         } ks_script_end_scope(ctx);
@@ -87,7 +87,7 @@ TEST_CASE("C API: Script Engine Suite") {
         } ks_script_end_scope(ctx);
 
         CHECK(ks_script_obj_is_valid(ctx, promoted_obj));
-        CHECK(ks_script_obj_type(ctx, promoted_obj) == KS_SCRIPT_OBJECT_TYPE_TABLE);
+        CHECK(ks_script_obj_type(ctx, promoted_obj) == KS_TYPE_SCRIPT_TABLE);
 
         Ks_Script_Object val = ks_script_table_get(ctx, static_cast<Ks_Script_Table>(promoted_obj), ks_script_create_cstring(ctx, "k"));
         CHECK(ks_script_obj_as_number(ctx, val) == 100.0);
@@ -109,7 +109,7 @@ TEST_CASE("C API: Script Engine Suite") {
                 KS_SCRIPT_FUNC(add_func, KS_TYPE_DOUBLE, KS_TYPE_DOUBLE)
             );
 
-            CHECK(ks_script_obj_type(ctx, func_obj) == KS_SCRIPT_OBJECT_TYPE_FUNCTION);
+            CHECK(ks_script_obj_type(ctx, func_obj) == KS_TYPE_SCRIPT_FUNCTION);
 
             Ks_Script_Function_Call_Result res_c = ks_script_func_callv(ctx, func_obj,
                 ks_script_create_number(ctx, 10),
@@ -124,7 +124,7 @@ TEST_CASE("C API: Script Engine Suite") {
             ks_script_set_global(ctx, "my_add", func_obj);
 
             const char* script = "return my_add(5, 7)";
-            Ks_Script_Function_Call_Result res_lua = ks_script_do_string(ctx, script);
+            Ks_Script_Function_Call_Result res_lua = ks_script_do_cstring(ctx, script);
 
             CHECK(ks_script_call_succeded(ctx, res_lua));
             CHECK(ks_script_obj_as_number(ctx, ks_script_call_get_return(ctx, res_lua)) == 12.0);
@@ -170,7 +170,7 @@ TEST_CASE("C API: Script Engine Suite") {
         ks_script_begin_scope(ctx); {
 
             Ks_Script_Table tbl = ks_script_create_named_table(ctx, "config");
-            CHECK(ks_script_obj_type(ctx, tbl) == KS_SCRIPT_OBJECT_TYPE_TABLE);
+            CHECK(ks_script_obj_type(ctx, tbl) == KS_TYPE_SCRIPT_TABLE);
 
             ks_script_table_set(ctx, tbl,
                 ks_script_create_cstring(ctx, "width"),
@@ -218,7 +218,7 @@ TEST_CASE("C API: Script Engine Suite") {
             CHECK(ks_script_obj_has_metatable(ctx, obj) == ks_true);
 
             Ks_Script_Table got_mt = ks_script_obj_get_metatable(ctx, obj);
-            CHECK(ks_script_obj_type(ctx, got_mt) == KS_SCRIPT_OBJECT_TYPE_TABLE);
+            CHECK(ks_script_obj_type(ctx, got_mt) == KS_TYPE_SCRIPT_TABLE);
 
             ks_script_table_set(ctx, mt, ks_script_create_cstring(ctx, "flag"), ks_script_create_boolean(ctx, ks_true));
 
@@ -235,21 +235,26 @@ TEST_CASE("C API: Script Engine Suite") {
             void* ptr = &dummy_int;
 
             Ks_Script_LightUserdata lud = ks_script_create_lightuserdata(ctx, ptr);
-            CHECK(ks_script_obj_type(ctx, lud) == KS_SCRIPT_OBJECT_TYPE_LIGHTUSERDATA);
+            CHECK(ks_script_obj_type(ctx, lud) == KS_TYPE_LIGHTUSERDATA);
 
             void* got_ptr = ks_script_lightuserdata_get_ptr(ctx, lud);
             CHECK(got_ptr == ptr);
 
             struct MyData { int x; float y; };
             Ks_Script_Userdata ud = ks_script_create_userdata(ctx, sizeof(MyData));
-            CHECK(ks_script_obj_type(ctx, ud) == KS_SCRIPT_OBJECT_TYPE_USERDATA);
+            CHECK(ks_script_obj_type(ctx, ud) == KS_TYPE_USERDATA);
 
-            MyData* data_ptr = (MyData*)ks_script_userdata_get_ptr(ctx, ud);
+            Ks_UserData info = ks_script_obj_as_userdata(ctx, ud);
+            REQUIRE(info.data != nullptr);
+            CHECK(info.size == sizeof(MyData));
+
+            MyData* data_ptr = (MyData*)info.data;
             REQUIRE(data_ptr != nullptr);
             data_ptr->x = 100;
             data_ptr->y = 3.14f;
 
-            MyData* read_ptr = (MyData*)ks_script_userdata_get_ptr(ctx, ud);
+            Ks_UserData info_read = ks_script_obj_as_userdata(ctx, ud);
+            MyData* read_ptr = (MyData*)info_read.data;
             CHECK(read_ptr->x == 100);
             CHECK(read_ptr->y == 3.14f);
 
@@ -277,7 +282,7 @@ TEST_CASE("C API: Script Engine Suite") {
                 return h.hp
             )";
 
-            Ks_Script_Function_Call_Result res = ks_script_do_string(ctx, script);
+            Ks_Script_Function_Call_Result res = ks_script_do_cstring(ctx, script);
             CHECK(ks_script_call_succeded(ctx, res));
 
             Ks_Script_Object ret = ks_script_call_get_return(ctx, res);
@@ -326,7 +331,7 @@ TEST_CASE("C API: Script Engine Suite") {
                 return t.id, t.position.x, t.scale.y
             )";
 
-            Ks_Script_Function_Call_Result res = ks_script_do_string(ctx, script);
+            Ks_Script_Function_Call_Result res = ks_script_do_cstring(ctx, script);
 
             if (!ks_script_call_succeded(ctx, res)) {
                 FAIL(ks_script_get_last_error_str(ctx));
@@ -375,7 +380,7 @@ TEST_CASE("C API: Script Engine Suite") {
                 return v1, v2
             )";
 
-            Ks_Script_Function_Call_Result res = ks_script_do_string(ctx, script);
+            Ks_Script_Function_Call_Result res = ks_script_do_cstring(ctx, script);
             CHECK(ks_script_obj_as_number(ctx, ks_script_call_get_return_at(ctx, res, 1)) == 0.0);
             CHECK(ks_script_obj_as_number(ctx, ks_script_call_get_return_at(ctx, res, 2)) == 10.0);
         }
@@ -424,7 +429,7 @@ TEST_CASE("C API: Script Engine Suite") {
                 return h1.hp, h3.hp, id_val, dmg1, dmg2
             )";
 
-            Ks_Script_Function_Call_Result res = ks_script_do_string(ctx, script);
+            Ks_Script_Function_Call_Result res = ks_script_do_cstring(ctx, script);
 
             if (!ks_script_call_succeded(ctx, res)) {
                 FAIL(ks_script_get_last_error_str(ctx));
@@ -451,12 +456,12 @@ TEST_CASE("C API: Script Engine Suite") {
                     return "Done"
                 end
             )";
-            ks_script_do_string(ctx, script);
+            ks_script_do_cstring(ctx, script);
 
             Ks_Script_Object func_obj = ks_script_get_global(ctx, "co_gen");
             Ks_Script_Coroutine co = ks_script_create_coroutine(ctx, ks_script_obj_as_function(ctx, func_obj));
 
-            CHECK(ks_script_obj_type(ctx, co) == KS_SCRIPT_OBJECT_TYPE_COROUTINE);
+            CHECK(ks_script_obj_type(ctx, co) == KS_TYPE_SCRIPT_COROUTINE);
 
             CHECK(ks_script_coroutine_status(ctx, co) == KS_SCRIPT_COROUTINE_SUSPENDED);
 
@@ -478,7 +483,7 @@ TEST_CASE("C API: Script Engine Suite") {
             Ks_Script_Function_Call_Result res3 = ks_script_coroutine_resume(ctx, co, 0);
 
             CHECK(ks_script_call_succeded(ctx, res3));
-            const char* str = ks_script_obj_as_str(ctx, ks_script_call_get_return(ctx, res3));
+            const char* str = ks_script_obj_as_cstring(ctx, ks_script_call_get_return(ctx, res3));
             CHECK(strcmp(str, "Done") == 0);
 
             CHECK(ks_script_coroutine_status(ctx, co) == KS_SCRIPT_COROUTINE_DEAD);

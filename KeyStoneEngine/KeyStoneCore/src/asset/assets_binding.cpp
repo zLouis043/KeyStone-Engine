@@ -13,18 +13,19 @@ static Ks_AssetsManager get_am_from_upvalue(Ks_Script_Ctx ctx) {
 ks_returns_count l_assets_load(Ks_Script_Ctx ctx) {
     Ks_AssetsManager am = get_am_from_upvalue(ctx);
 
-    const char* type = ks_script_obj_as_str(ctx, ks_script_get_arg(ctx, 1));
-    const char* name = ks_script_obj_as_str(ctx, ks_script_get_arg(ctx, 2));
+    const char* type = ks_script_obj_as_cstring(ctx, ks_script_get_arg(ctx, 1));
+    const char* name = ks_script_obj_as_cstring(ctx, ks_script_get_arg(ctx, 2));
     Ks_Script_Object arg3 = ks_script_get_arg(ctx, 3);
 
     Ks_Handle handle = KS_INVALID_HANDLE;
 
-    if (ks_script_obj_type(ctx, arg3) == KS_SCRIPT_OBJECT_TYPE_STRING) {
-        const char* path = ks_script_obj_as_str(ctx, arg3);
+    Ks_Type t = ks_script_obj_type(ctx, arg3);
+    if (t == KS_TYPE_CSTRING) {
+        const char* path = ks_script_obj_as_cstring(ctx, arg3);
         handle = ks_assets_manager_load_asset_from_file(am, type, name, path);
     }
     else {
-        // Qui andrebbe l'overload per caricare da dati raw/userdata
+        // HERE SHOULD GO THE OVERLOAD TO LOAD DATA FROM RAW/USERDATA
         // handle = ks_assets_manager_load_asset_from_data(...)
     }
 
@@ -47,7 +48,7 @@ ks_returns_count l_assets_valid(Ks_Script_Ctx ctx) {
 ks_returns_count l_assets_get(Ks_Script_Ctx ctx) {
     Ks_AssetsManager am = get_am_from_upvalue(ctx);
 
-    const char* name = ks_script_obj_as_str(ctx, ks_script_get_arg(ctx, 1));
+    const char* name = ks_script_obj_as_cstring(ctx, ks_script_get_arg(ctx, 1));
     Ks_Handle handle = ks_assets_manager_get_asset(am, name);
 
     ks_script_stack_push_obj(ctx, ks_script_create_number(ctx, (double)handle));

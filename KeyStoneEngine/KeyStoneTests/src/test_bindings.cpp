@@ -30,7 +30,7 @@ ks_bool c_subscriber_cb(Ks_Event_Payload data, void* user_data) {
 
 ks_returns_count test_set_received(Ks_Script_Ctx ctx) {
     g_c_int_val = (int)ks_script_obj_as_number(ctx, ks_script_get_arg(ctx, 1));
-    const char* s = ks_script_obj_as_str(ctx, ks_script_get_arg(ctx, 2));
+    const char* s = ks_script_obj_as_cstring(ctx, ks_script_get_arg(ctx, 2));
     if (s) g_c_str_val = s;
     g_c_call_count++;
     return 0;
@@ -84,13 +84,13 @@ TEST_CASE("Managers-Lua bindings Tests") {
             end
         )";
 
-        Ks_Script_Function_Call_Result res = ks_script_do_string(ctx, script);
+        Ks_Script_Function_Call_Result res = ks_script_do_cstring(ctx, script);
 
         if (!ks_script_call_succeded(ctx, res)) {
             FAIL(ks_script_get_last_error_str(ctx));
         }
 
-        const char* ret_str = ks_script_obj_as_str(ctx, ks_script_call_get_return(ctx, res));
+        const char* ret_str = ks_script_obj_as_cstring(ctx, ks_script_call_get_return(ctx, res));
         REQUIRE(ret_str != nullptr);
         CHECK(strcmp(ret_str, "Success") == 0);
 	}
@@ -105,7 +105,7 @@ TEST_CASE("Managers-Lua bindings Tests") {
             end)
         )";
 
-        Ks_Script_Function_Call_Result res = ks_script_do_string(ctx, script);
+        Ks_Script_Function_Call_Result res = ks_script_do_cstring(ctx, script);
         CHECK(ks_script_call_succeded(ctx, res));
 
         ks_event_manager_publish(em, evt, 42, "Hello Lua");
@@ -121,7 +121,7 @@ TEST_CASE("Managers-Lua bindings Tests") {
             return h
         )";
 
-        Ks_Script_Function_Call_Result res = ks_script_do_string(ctx, setup_script);
+        Ks_Script_Function_Call_Result res = ks_script_do_cstring(ctx, setup_script);
         CHECK(ks_script_call_succeded(ctx, res));
 
         double h_val = ks_script_obj_as_number(ctx, ks_script_call_get_return(ctx, res));
@@ -134,7 +134,7 @@ TEST_CASE("Managers-Lua bindings Tests") {
             local h = events.get("Lua_Event")
             events.publish(h, 99, "From Lua")
         )";
-        ks_script_do_string(ctx, pub_script);
+        ks_script_do_cstring(ctx, pub_script);
 
         CHECK(g_c_call_count == 1);
         CHECK(g_c_int_val == 99);
@@ -157,7 +157,7 @@ TEST_CASE("Managers-Lua bindings Tests") {
             end
         )";
 
-        ks_script_do_string(ctx, script);
+        ks_script_do_cstring(ctx, script);
 
         CHECK(g_c_call_count == 1);
         CHECK(g_c_int_val == 1);
@@ -198,7 +198,7 @@ TEST_CASE("Managers-Lua bindings Tests") {
             local h = events.get("Table_Event")
             events.publish(h, { val = 123 })
         )";
-        ks_script_do_string(ctx, script);
+        ks_script_do_cstring(ctx, script);
 
         CHECK(table_verified == true);
     }

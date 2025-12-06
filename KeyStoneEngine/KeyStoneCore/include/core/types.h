@@ -49,29 +49,34 @@ typedef double ks_float64;
 /** @brief Platform-independent definition for variable argument lists. */
 typedef va_list ks_va_list;
 
+/**
+ * @brief Unified Type Enumeration.
+ * Used both for defining C++ function signatures (static types)
+ * and for identifying Lua objects at runtime (dynamic types).
+ */
 typedef enum Ks_Type {
-	KS_TYPE_UNKNOWN,
-	KS_TYPE_BOOL,
-	KS_TYPE_CHAR,
-	KS_TYPE_INT,
-	KS_TYPE_UINT,
-	KS_TYPE_FLOAT,
-	KS_TYPE_DOUBLE,
-	KS_TYPE_CSTRING,
-	KS_TYPE_LSTRING,
-	KS_TYPE_PTR,
-	KS_TYPE_USERDATA,
-	KS_TYPE_SCRIPT_TABLE,
-	KS_TYPE_SCRIPT_FUNCTION,
-	KS_TYPE_SCRIPT_COROUTINE,
-	KS_TYPE_SCRIPT_ANY
+    KS_TYPE_UNKNOWN = 0,
+    KS_TYPE_NIL,            ///< Lua Nil value.
+    KS_TYPE_VOID,           ///< Void / No return.
+    KS_TYPE_BOOL,           ///< Boolean (true/false).
+    KS_TYPE_CHAR,           ///< 8-bit integer / char.
+    KS_TYPE_INT,            ///< Standard integer.
+    KS_TYPE_UINT,           ///< Unsigned integer.
+    KS_TYPE_FLOAT,          ///< Single precision float.
+    KS_TYPE_DOUBLE,         ///< Double precision float (Lua Number default).
+    KS_TYPE_CSTRING,        ///< Null-terminated C string (const char*).
+    KS_TYPE_PTR,            ///< Generic pointer (void*).
+    KS_TYPE_USERDATA,       ///< Full Userdata (Managed Object).
+    KS_TYPE_LIGHTUSERDATA,  ///< Light Userdata (Raw Pointer wrapper).
+    KS_TYPE_SCRIPT_TABLE,   ///< Lua Table.
+    KS_TYPE_SCRIPT_FUNCTION,///< Lua Function (Callback).
+    KS_TYPE_SCRIPT_COROUTINE,///< Lua Thread/Coroutine.
+    KS_TYPE_SCRIPT_ANY      ///< Wildcard type (accepts anything).
 } Ks_Type;
 
-typedef struct Ks_LStr {
-	ks_str data;
-	ks_size len;
-} Ks_LStr;
-
+/**
+ * @brief Generic buffer wrapper.
+ */
 typedef struct Ks_UserData {
 	ks_ptr data;
 	ks_size size;

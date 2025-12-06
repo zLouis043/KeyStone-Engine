@@ -30,7 +30,7 @@ typedef Ks_AssetData (*asset_load_from_file_fn)(ks_str file_path);
  * @param data Pointer to the raw byte data.
  * @return Pointer to the loaded asset data, or NULL on failure.
  */
-typedef Ks_AssetData (*asset_load_from_data_fn)(const ks_byte* data);
+typedef Ks_AssetData (*asset_load_from_data_fn)(const Ks_UserData data);
 
 /**
  * @brief Function pointer type for destroying/freeing an asset.
