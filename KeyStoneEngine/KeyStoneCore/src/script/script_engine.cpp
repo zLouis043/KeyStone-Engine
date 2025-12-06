@@ -1732,7 +1732,7 @@ ks_str ks_script_obj_get_usertype_name(Ks_Script_Ctx ctx, Ks_Script_Object obj)
 
         char* copy = (char*)ks_alloc_debug(
             len + 1,
-            KS_LT_FRAME,
+            KS_LT_USER_MANAGED,
             KS_TAG_SCRIPT,
             "UsertypeNameCopy"
         );
