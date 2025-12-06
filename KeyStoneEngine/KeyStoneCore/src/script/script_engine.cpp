@@ -1519,6 +1519,7 @@ KS_API Ks_Script_Object ks_script_stack_peek(Ks_Script_Ctx ctx, ks_stack_idx i)
 
         lua_pushvalue(L, (int)i);
         obj.val.generic_ref = sctx->store_in_registry();
+        obj.state = KS_SCRIPT_OBJECT_VALID;
 
         return obj;
     }
