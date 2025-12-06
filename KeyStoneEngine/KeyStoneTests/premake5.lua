@@ -31,6 +31,7 @@ project "KeyStoneTests"
    
    filter "system:windows"
       buildoptions { "/utf-8", "/Zc:preprocessor" }
+      defines { "_CRT_SECURE_NO_WARNINGS" }
 
    filter "configurations:Debug"
       defines { "DEBUG", "_DEBUG" }

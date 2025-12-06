@@ -432,8 +432,7 @@ KS_API ks_bool ks_script_iterator_next(Ks_Script_Ctx ctx,
                                   Ks_Script_Object *value);
 KS_API ks_no_ret ks_script_iterator_destroy(Ks_Script_Ctx ctx, Ks_Script_Table_Iterator *iterator);
 KS_API ks_no_ret ks_script_iterator_reset(Ks_Script_Ctx ctx, Ks_Script_Table_Iterator *iterator);
-KS_API Ks_Script_Table_Iterator
-KS_API ks_script_iterator_clone(Ks_Script_Ctx ctx, Ks_Script_Table_Iterator *iterator);
+KS_API Ks_Script_Table_Iterator ks_script_iterator_clone(Ks_Script_Ctx ctx, Ks_Script_Table_Iterator *iterator);
 
 /**
  * @brief Gets the Nth argument passed to the C function.

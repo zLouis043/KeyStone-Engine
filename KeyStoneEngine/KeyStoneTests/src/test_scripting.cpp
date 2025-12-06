@@ -266,7 +266,7 @@ TEST_CASE("C API: Script Engine Suite") {
             ks_script_usertype_add_method(b, "heal",
                 KS_SCRIPT_FUNC(hero_heal, KS_TYPE_DOUBLE)
             );
-            ks_script_usertype_add_field(b, "hp", KS_TYPE_INT, offsetof(Hero, hp), nullptr);
+            ks_script_usertype_add_property(b, "hp", hero_get_hp, hero_set_hp);
 
             ks_script_usertype_end(b);
 
@@ -389,7 +389,7 @@ TEST_CASE("C API: Script Engine Suite") {
 
             auto b_ent = ks_script_usertype_begin(ctx, T_ENT, sizeof(Entity));
             ks_script_usertype_add_method(b_ent, "exist", KS_SCRIPT_FUNC_VOID(entity_exist));
-            ks_script_usertype_add_field(b_ent, "id", KS_TYPE_INT, offsetof(Entity, id), nullptr);
+            ks_script_usertype_add_property(b_ent, "id", entity_get_id, nullptr);
             ks_script_usertype_end(b_ent);
 
             auto b_hero = ks_script_usertype_begin(ctx, T_HERO, sizeof(Hero));
@@ -408,7 +408,7 @@ TEST_CASE("C API: Script Engine Suite") {
                 KS_SCRIPT_SIG_DEF(hero_attack_strong, KS_TYPE_DOUBLE)
             ));
 
-            ks_script_usertype_add_field(b_hero, "hp", KS_TYPE_INT, offsetof(Hero, hp), nullptr);
+            ks_script_usertype_add_property(b_hero, "hp", hero_get_hp, hero_set_hp);
 
             ks_script_usertype_end(b_hero);
 

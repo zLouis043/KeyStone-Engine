@@ -238,7 +238,7 @@ KS_API Ks_Script_Table ks_script_create_table_with_capacity(Ks_Script_Ctx ctx, k
     auto* sctx = static_cast<KsScriptEngineCtx*>(ctx);
     lua_State* L = sctx->get_raw_state();
 
-    lua_createtable(L, array_sz, hash_sz);
+    lua_createtable(L, (int)array_sz, (int)hash_sz);
     Ks_Script_Ref ref = sctx->store_in_registry();
 
     Ks_Script_Table obj;
@@ -389,7 +389,7 @@ Ks_Script_Function_Call_Result ks_script_func_callv_impl(Ks_Script_Ctx ctx, Ks_S
         ks_script_stack_push_obj(ctx, arg);
     }
 
-    if (lua_pcall(L, args.size(), LUA_MULTRET, err_func_idx) != LUA_OK) {
+    if (lua_pcall(L, (int)args.size(), LUA_MULTRET, err_func_idx) != LUA_OK) {
         const char* err = lua_tostring(L, -1);
         sctx->set_internal_error(KS_SCRIPT_ERROR_RUNTIME, err);
         lua_pop(L, 2);
@@ -431,8 +431,8 @@ KS_API Ks_Script_Object ks_script_func_get_upvalue(Ks_Script_Ctx ctx, ks_upvalue
     auto* sctx = static_cast<KsScriptEngineCtx*>(ctx);
     lua_State* L = sctx->get_raw_state();
 
-    int idx = i + sctx->current_frame().upval_offset;
-    if (sctx->current_frame().upval_offset == 0) idx = i + 1;
+    int idx = (int)(i + sctx->current_frame().upval_offset);
+    if (sctx->current_frame().upval_offset == 0) idx = (int)(i + 1);
 
     lua_pushvalue(L, lua_upvalueindex(idx));
 
@@ -571,12 +571,6 @@ KS_API Ks_Script_Function_Call_Result ks_script_coroutine_resume(Ks_Script_Ctx c
         }
     }
     else {
-        /*
-        const char* err = lua_tostring(co, -1);
-        sctx->set_internal_error(KS_SCRIPT_ERROR_RUNTIME, err ? err : "Coroutine resume failed");
-        lua_pop(co, 1);
-        return ks_script_create_invalid_obj(ctx);
-        */
         const char* err_msg = lua_tostring(co, -1);
 
         luaL_traceback(co, co, err_msg, 1);
@@ -861,15 +855,15 @@ KS_API ks_no_ret ks_script_usertype_end(Ks_Script_Userytype_Builder builder)
 
     for (auto& field : b->fields) {
         lua_pushstring(L, field.name.c_str());
-        lua_pushinteger(L, field.offset);
-        lua_pushinteger(L, field.type); 
+        lua_pushinteger(L, (int)field.offset);
+        lua_pushinteger(L, (int)field.type);
         lua_pushstring(L, field.type_name.c_str());
         lua_pushcclosure(L, usertype_field_getter_thunk, 3);
         lua_settable(L, getters_tbl_idx);
 
         lua_pushstring(L, field.name.c_str());
-        lua_pushinteger(L, field.offset);
-        lua_pushinteger(L, field.type);
+        lua_pushinteger(L, (int)field.offset);
+        lua_pushinteger(L, (int)field.type);
         lua_pushstring(L, field.type_name.c_str());
         lua_pushcclosure(L, usertype_field_setter_thunk, 3);
         lua_settable(L, setters_tbl_idx);
@@ -1393,18 +1387,18 @@ KS_API Ks_Script_Object ks_script_stack_peek(Ks_Script_Ctx ctx, ks_stack_idx i)
     auto* sctx = static_cast<KsScriptEngineCtx*>(ctx);
     lua_State* L = sctx->get_raw_state();
 
-    int type = lua_type(L, i);
+    int type = lua_type(L, (int)i);
 
     switch (type) {
     case LUA_TNIL:
         return ks_script_create_nil(ctx);
     case LUA_TNUMBER:
-        return ks_script_create_number(ctx, lua_tonumber(L, i));
+        return ks_script_create_number(ctx, lua_tonumber(L, (int)i));
     case LUA_TBOOLEAN:
-        return ks_script_create_boolean(ctx, lua_toboolean(L, i));
+        return ks_script_create_boolean(ctx, lua_toboolean(L, (int)i));
     case LUA_TSTRING:
-        return ks_script_create_cstring(ctx, lua_tostring(L, i));
-    case LUA_TLIGHTUSERDATA: return ks_script_create_lightuserdata(ctx, lua_touserdata(L, i));
+        return ks_script_create_cstring(ctx, lua_tostring(L, (int)i));
+    case LUA_TLIGHTUSERDATA: return ks_script_create_lightuserdata(ctx, lua_touserdata(L, (int)i));
     case LUA_TTABLE:
     case LUA_TFUNCTION:
     case LUA_TTHREAD: 
@@ -1417,7 +1411,7 @@ KS_API Ks_Script_Object ks_script_stack_peek(Ks_Script_Ctx ctx, ks_stack_idx i)
         else if (type == LUA_TTHREAD) obj.type = KS_SCRIPT_OBJECT_TYPE_COROUTINE;
         else if (type == LUA_TUSERDATA) obj.type = KS_SCRIPT_OBJECT_TYPE_USERDATA;
 
-        lua_pushvalue(L, i);
+        lua_pushvalue(L, (int)i);
         obj.val.generic_ref = sctx->store_in_registry();
 
         return obj;
@@ -1434,7 +1428,7 @@ KS_API Ks_Script_Object ks_script_stack_get(Ks_Script_Ctx ctx, ks_stack_idx i)
 {
     if (!ctx) return ks_script_create_invalid_obj(ctx);
 
-    Ks_Script_Object obj = ks_script_stack_peek(ctx, i);
+    Ks_Script_Object obj = ks_script_stack_peek(ctx, (int)i);
     return obj;
 }
 
@@ -1459,7 +1453,7 @@ KS_API ks_no_ret ks_script_stack_remove(Ks_Script_Ctx ctx, ks_stack_idx i)
     if (!ctx) return;
     auto* sctx = static_cast<KsScriptEngineCtx*>(ctx);
     lua_State* L = sctx->get_raw_state();
-    lua_remove(L, i);
+    lua_remove(L, (int)i);
 }
 
 KS_API ks_no_ret ks_script_stack_insert(Ks_Script_Ctx ctx, ks_stack_idx i)
@@ -1467,7 +1461,7 @@ KS_API ks_no_ret ks_script_stack_insert(Ks_Script_Ctx ctx, ks_stack_idx i)
     if (!ctx) return;
     auto* sctx = static_cast<KsScriptEngineCtx*>(ctx);
     lua_State* L = sctx->get_raw_state();
-    lua_insert(L, i);
+    lua_insert(L, (int)i);
 }
 
 KS_API ks_no_ret ks_script_stack_replace(Ks_Script_Ctx ctx, ks_stack_idx i)
@@ -1475,7 +1469,7 @@ KS_API ks_no_ret ks_script_stack_replace(Ks_Script_Ctx ctx, ks_stack_idx i)
     if (!ctx) return;
     auto* sctx = static_cast<KsScriptEngineCtx*>(ctx);
     lua_State* L = sctx->get_raw_state();
-    lua_replace(L, i);
+    lua_replace(L, (int)i);
 }
 
 KS_API ks_no_ret ks_script_stack_copy(Ks_Script_Ctx ctx, ks_stack_idx from, ks_stack_idx to)
@@ -1484,8 +1478,8 @@ KS_API ks_no_ret ks_script_stack_copy(Ks_Script_Ctx ctx, ks_stack_idx from, ks_s
     auto* sctx = static_cast<KsScriptEngineCtx*>(ctx);
     lua_State* L = sctx->get_raw_state();
 
-    lua_pushvalue(L, from);
-    lua_replace(L, to);
+    lua_pushvalue(L, (int)from);
+    lua_replace(L, (int)to);
 }
 
 KS_API ks_no_ret ks_script_stack_dump(Ks_Script_Ctx ctx)
@@ -2119,7 +2113,7 @@ KS_API ks_no_ret ks_script_iterator_reset(Ks_Script_Ctx ctx, Ks_Script_Table_Ite
     iterator->valid = ks_true;
 }
 
-KS_API Ks_Script_Table_Iterator KS_API ks_script_iterator_clone(Ks_Script_Ctx ctx, Ks_Script_Table_Iterator* iterator)
+KS_API Ks_Script_Table_Iterator ks_script_iterator_clone(Ks_Script_Ctx ctx, Ks_Script_Table_Iterator* iterator)
 {
     Ks_Script_Table_Iterator clone = *iterator;
     return clone;
@@ -2129,7 +2123,7 @@ Ks_Script_Object ks_script_get_arg(Ks_Script_Ctx ctx, ks_stack_idx n)
 {
     if (!ctx) return ks_script_create_invalid_obj(ctx);
     auto* sctx = static_cast<KsScriptEngineCtx*>(ctx);
-    return ks_script_stack_peek(ctx, n + sctx->current_frame().arg_offset);
+    return ks_script_stack_peek(ctx, (int)(n + sctx->current_frame().arg_offset));
 }
 
 Ks_Script_Object ks_script_get_upvalue(Ks_Script_Ctx ctx, ks_upvalue_idx n)
@@ -2137,7 +2131,7 @@ Ks_Script_Object ks_script_get_upvalue(Ks_Script_Ctx ctx, ks_upvalue_idx n)
     if (!ctx) return ks_script_create_invalid_obj(ctx);
     auto* sctx = static_cast<KsScriptEngineCtx*>(ctx);
     lua_State* L = sctx->get_raw_state();
-    int real_uv_idx = n + sctx->current_frame().upval_offset;
+    int real_uv_idx = (int)(n + sctx->current_frame().upval_offset);
     lua_pushvalue(L, lua_upvalueindex(real_uv_idx));
     return ks_script_stack_pop_obj(ctx);
 }
@@ -2156,7 +2150,7 @@ KS_API ks_no_ret ks_script_func_call(Ks_Script_Ctx ctx, Ks_Script_Function f, ks
     sctx->get_from_registry(f.val.function_ref);
     lua_insert(L, -(int)n_args - 1);
     
-    if (lua_pcall(L, n_args, n_rets, err_func_idx) != LUA_OK) {
+    if (lua_pcall(L, (int)n_args, (int)n_rets, err_func_idx) != LUA_OK) {
         ks_str err = lua_tostring(L, -1);
         sctx->set_internal_error(KS_SCRIPT_ERROR_RUNTIME, err ? err : "Function call failed");
         lua_pop(L, 2);

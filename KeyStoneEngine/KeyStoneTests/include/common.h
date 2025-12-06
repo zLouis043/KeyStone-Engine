@@ -57,6 +57,12 @@ public:
     int attack_strong(int dmg) { return dmg * 2; }
 };
 
+inline ks_returns_count entity_get_id(Ks_Script_Ctx ctx) {
+    Entity* self = (Entity*)ks_script_get_self(ctx);
+    ks_script_stack_push_number(ctx, self ? self->id : 0);
+    return 1;
+}
+
 inline ks_returns_count entity_exist(Ks_Script_Ctx ctx) {
     Entity* self = (Entity*)ks_script_get_self(ctx);
     if (self) self->exist();
@@ -86,6 +92,20 @@ inline ks_returns_count hero_new_full(Ks_Script_Ctx ctx) {
 
 inline void hero_delete(ks_ptr data, ks_size size) {
     static_cast<Hero*>(data)->~Hero();
+}
+
+inline ks_returns_count hero_get_hp(Ks_Script_Ctx ctx) {
+    Hero* self = (Hero*)ks_script_get_self(ctx);
+    ks_script_stack_push_number(ctx, self->hp);
+    return 1;
+}
+
+inline ks_returns_count hero_set_hp(Ks_Script_Ctx ctx) {
+    Hero* self = (Hero*)ks_script_get_self(ctx);
+    int val = (int)ks_script_obj_as_number(ctx, ks_script_get_arg(ctx, 1));
+    if (val < 0) val = 0;
+    self->hp = val;
+    return 0;
 }
 
 inline ks_returns_count hero_heal(Ks_Script_Ctx ctx) {

@@ -161,7 +161,7 @@ public:
                 arg.ui_val = (ks_uint32)va_arg(args, ks_uint32);
                 break;
             case KS_TYPE_FLOAT:
-                arg.f_val = (ks_double)va_arg(args, ks_double);
+                arg.f_val = (float)va_arg(args, ks_double);
                 break;
             case KS_TYPE_DOUBLE:
                 arg.d_val = (ks_double)va_arg(args, ks_double);

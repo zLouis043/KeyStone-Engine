@@ -34,7 +34,6 @@ project("KeyStoneCore")
 	defines({
 		"KS_EXPORT",
 		"FMT_HEADER_ONLY",
-		"SPDLOG_HEADER_ONLY",
 	})
 
 	characterset("Unicode")
