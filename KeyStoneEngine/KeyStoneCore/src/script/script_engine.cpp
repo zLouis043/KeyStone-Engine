@@ -984,6 +984,7 @@ KS_API ks_no_ret ks_script_stack_push_obj(Ks_Script_Ctx ctx, Ks_Script_Object va
     case KS_TYPE_USERDATA: {
         sctx->get_from_registry(val.val.userdata_ref);
     } break;
+    case KS_TYPE_PTR:
     case KS_TYPE_LIGHTUSERDATA: {
         lua_pushlightuserdata(L, val.val.lightuserdata);
     } break;
