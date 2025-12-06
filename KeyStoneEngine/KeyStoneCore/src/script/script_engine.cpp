@@ -953,18 +953,20 @@ KS_API ks_no_ret ks_script_stack_push_obj(Ks_Script_Ctx ctx, Ks_Script_Object va
     lua_State* L = sctx->get_raw_state();
 
     switch (val.type) {
-    case KS_TYPE_UNKNOWN: {
-        lua_pushnil(L);
-    } break;
+    case KS_TYPE_UNKNOWN:
+    case KS_TYPE_VOID: 
+    case KS_TYPE_SCRIPT_ANY:
     case KS_TYPE_NIL: {
         lua_pushnil(L);
     } break;
     case KS_TYPE_CSTRING: {
         sctx->get_from_registry(val.val.string_ref);
     } break;
+    case KS_TYPE_DOUBLE:
     case KS_TYPE_FLOAT:
     case KS_TYPE_INT:
-    case KS_TYPE_DOUBLE: {
+    case KS_TYPE_UINT:
+    case KS_TYPE_CHAR: {
         lua_pushnumber(L, val.val.number);
     } break;
     case KS_TYPE_BOOL: {
