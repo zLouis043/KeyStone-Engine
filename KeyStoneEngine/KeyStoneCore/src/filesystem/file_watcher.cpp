@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <string>
 #include <vector>
+#include <algorithm>
 
 namespace fs = std::filesystem;
 
