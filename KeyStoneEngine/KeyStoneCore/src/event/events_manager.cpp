@@ -227,7 +227,7 @@ private:
 };
 
 KS_API Ks_EventManager ks_event_manager_create() {
-    return new (ks_alloc(sizeof(EventManager_Impl), KS_LT_PERMANENT, KS_TAG_INTERNAL_DATA)) EventManager_Impl();
+    return new (ks_alloc(sizeof(EventManager_Impl), KS_LT_USER_MANAGED, KS_TAG_INTERNAL_DATA)) EventManager_Impl();
 }
 
 KS_API ks_no_ret ks_event_manager_destroy(Ks_EventManager em) {

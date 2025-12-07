@@ -75,6 +75,17 @@ KS_API Ks_Handle ks_assets_manager_load_asset_from_data(
     const Ks_UserData data);
 
 /**
+ * @brief Reloads an existing asset from disk/memory.
+ * Use this for hot-reloading.
+ * @param am The Assets Manager.
+ * @param handle The handle of the asset to reload.
+ * @return ks_true if reloaded successfully, ks_false otherwise.
+ */
+KS_API ks_bool ks_assets_manager_reload_asset(Ks_AssetsManager am, Ks_Handle handle);
+
+KS_API ks_no_ret ks_assets_manager_update(Ks_AssetsManager am);
+
+/**
  * @brief Retrieves a handle to an already loaded asset by name.
  * Increments the reference count.
  *

@@ -206,7 +206,7 @@ private:
 };
 
 KS_API Ks_StateManager ks_state_manager_create() {
-    return new (ks_alloc(sizeof(StateManager_Impl), KS_LT_PERMANENT, KS_TAG_INTERNAL_DATA)) StateManager_Impl();
+    return new (ks_alloc(sizeof(StateManager_Impl), KS_LT_USER_MANAGED, KS_TAG_INTERNAL_DATA)) StateManager_Impl();
 }
 
 KS_API ks_no_ret ks_state_manager_destroy(Ks_StateManager sm) {

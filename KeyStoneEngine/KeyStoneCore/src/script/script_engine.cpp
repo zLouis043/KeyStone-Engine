@@ -68,7 +68,7 @@ static int ks_script_error_handler(lua_State* L);
 Ks_Script_Ctx ks_script_create_ctx() {
 	KsScriptEngineCtx* ctx = static_cast<KsScriptEngineCtx*>(ks_alloc_debug(
 		sizeof(*ctx),
-		KS_LT_PERMANENT,
+		KS_LT_USER_MANAGED,
 		KS_TAG_INTERNAL_DATA,
 		"KsScriptEngineCtx"
 	));

@@ -34,6 +34,7 @@ struct PayloadInternal {
 struct LuaSubInfo {
     Ks_Script_Ctx ctx;
     Ks_Script_Ref func_ref;
+    Ks_EventManager em;
 };
 
 static std::mutex s_subs_mutex;
@@ -202,6 +203,7 @@ ks_returns_count l_events_subscribe(Ks_Script_Ctx ctx) {
 
     LuaSubInfo* info = (LuaSubInfo*)ks_alloc(sizeof(LuaSubInfo), KS_LT_USER_MANAGED, KS_TAG_SCRIPT);
     info->ctx = ctx;
+    info->em = em;
 
     ks_script_promote(ctx, func);
     info->func_ref = func.val.function_ref;
@@ -264,9 +266,17 @@ KS_API ks_no_ret ks_event_manager_lua_bind(Ks_EventManager em, Ks_Script_Ctx ctx
 KS_API ks_no_ret ks_event_manager_lua_shutdown(Ks_EventManager em) {
     std::lock_guard<std::mutex> lock(s_subs_mutex);
 
-    for (auto& [handle, info] : s_lua_subscriptions) {
-        ks_event_manager_unsubscribe(em, (Ks_Handle)handle);
-        ks_dealloc(info);
+    auto it = s_lua_subscriptions.begin();
+    while (it != s_lua_subscriptions.end()) {
+        LuaSubInfo* info = it->second;
+
+        if (info->em == em) {
+            ks_event_manager_unsubscribe(em, (Ks_Handle)it->first);
+            ks_dealloc(info);
+            it = s_lua_subscriptions.erase(it);
+        }
+        else {
+            ++it;
+        }
     }
-    s_lua_subscriptions.clear();
 }

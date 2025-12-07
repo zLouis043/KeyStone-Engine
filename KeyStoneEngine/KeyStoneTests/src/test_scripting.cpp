@@ -3,8 +3,24 @@
 #include <string.h>
 #include <string>
 #include <new>
+#include <fstream>
+#include <cstdio>
+#include <thread>
 
 #include "../include/common.h"
+
+static bool g_reload_request = false;
+
+static void on_script_change(ks_str path, ks_ptr user_data) {
+    g_reload_request = true;
+    KS_LOG_DEBUG("HotReload: Detected change in '%s'", path);
+}
+
+static void write_script_file(const char* path, const char* content) {
+    std::ofstream out(path);
+    out << content;
+    out.close();
+}
 
 TEST_CASE("C API: Script Engine Suite") {
     ks_memory_init();
@@ -501,6 +517,75 @@ TEST_CASE("C API: Script Engine Suite") {
         } ks_script_end_scope(ctx);
     }
 
+    SUBCASE("Hot Reloading: Automatic Trigger via File Watcher") {
+        Ks_EventManager em = ks_event_manager_create();
+        Ks_StateManager sm = ks_state_manager_create();
+        Ks_FileWatcher watcher = ks_file_watcher_create();
+
+        Ks_Script_Ctx hot_ctx = nullptr;
+
+        auto reload_lua_env = [&]() {
+            if (hot_ctx) ks_script_destroy_ctx(hot_ctx);
+
+            hot_ctx = ks_script_create_ctx();
+            ks_types_lua_bind(hot_ctx);
+            ks_event_manager_lua_bind(em, hot_ctx);
+            ks_state_manager_lua_bind(sm, hot_ctx);
+
+            g_reload_request = false;
+        };
+
+        reload_lua_env();
+
+        const char* script_path = "auto_reload_test.lua";
+
+        const char* v1 = R"(
+            local s = state("auto_score", 0)
+            s:set(s:get() + 1)
+        )";
+        write_script_file(script_path, v1);
+
+        ks_file_watcher_watch_file(watcher, script_path, on_script_change, nullptr);
+
+        ks_script_do_file(hot_ctx, script_path);
+
+        Ks_Handle h_score = ks_state_manager_get_handle(sm, "auto_score");
+        CHECK(ks_state_get_int(sm, h_score) == 1);
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(1100));
+        const char* v2 = R"(
+            local s = state("auto_score")
+            s:set(s:get() + 100)
+        )";
+        write_script_file(script_path, v2);
+
+        bool reloaded_happened = false;
+        for (int i = 0; i < 20; ++i) {
+            ks_file_watcher_poll(watcher);
+
+            if (g_reload_request) {
+                ks_event_manager_lua_shutdown(em);
+                reload_lua_env();
+
+                ks_script_do_file(hot_ctx, script_path);
+
+                reloaded_happened = true;
+                break;
+            }
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+
+        CHECK(reloaded_happened == true);
+
+        CHECK(ks_state_get_int(sm, h_score) == 101);
+
+        ks_file_watcher_destroy(watcher);
+        ks_script_destroy_ctx(hot_ctx);
+        ks_state_manager_destroy(sm);
+        ks_event_manager_destroy(em);
+        std::remove(script_path);
+    }
 
     ks_script_destroy_ctx(ctx);
     ks_memory_shutdown();

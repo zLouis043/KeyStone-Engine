@@ -16,3 +16,4 @@
 #include "./include/state/state_manager.h"
 #include "./include/state/state.h"
 #include "./include/state/state_binding.h"
+#include "./include/filesystem/file_watcher.h"
