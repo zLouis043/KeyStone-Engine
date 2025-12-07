@@ -1,5 +1,4 @@
 #include "../../include/script/script_engine.h"
-#include "../../include/script/script_engine.h"
 #include "../../include/script/script_engine_internal.h"
 #include "../../include/memory/memory.h"
 #include "../../include/core/log.h"
@@ -2685,15 +2684,15 @@ static void push_overload_dispatcher(lua_State* L, const std::vector<MethodInfo>
     if (type_name) lua_pushstring(L, type_name); else lua_pushnil(L);
 
     if (n_user_upvalues > 0) {
-        int current_top = lua_gettop(L);
-        int first_user_abs_idx = current_top - 4 - (int)n_user_upvalues + 1;
+        //int current_top = lua_gettop(L);
+        //int first_user_abs_idx = current_top - 4 - (int)n_user_upvalues + 1;
 
-        for (ks_size k = 0; k < n_user_upvalues; ++k) {
-            lua_pushvalue(L, first_user_abs_idx);
-            lua_remove(L, first_user_abs_idx);
-        }
+        //for (ks_size k = 0; k < n_user_upvalues; ++k) {
+        //    lua_pushvalue(L, first_user_abs_idx);
+        //    lua_remove(L, first_user_abs_idx);
+        //}
 
-        //lua_rotate(L, -(int)(n_user_upvalues + 4), (int)n_user_upvalues);
+        lua_rotate(L, -(int)(n_user_upvalues + 4), (int)n_user_upvalues);
     }
 
     lua_pushcclosure(L, overload_dispatcher_thunk, 4 + (int)n_user_upvalues);
