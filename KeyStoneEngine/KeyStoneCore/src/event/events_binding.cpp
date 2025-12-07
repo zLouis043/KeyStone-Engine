@@ -31,6 +31,14 @@ struct PayloadInternal {
     ks_ptr script_ctx;
 };
 
+struct LuaSubInfo {
+    Ks_Script_Ctx ctx;
+    Ks_Script_Ref func_ref;
+};
+
+static std::mutex s_subs_mutex;
+static std::unordered_map<ks_uint32, LuaSubInfo*> s_lua_subscriptions;
+
 static Ks_EventManager get_em(Ks_Script_Ctx ctx) {
     Ks_Script_Object up = ks_script_func_get_upvalue(ctx, 1);
     return (Ks_EventManager)ks_script_lightuserdata_get_ptr(ctx, up);
@@ -143,10 +151,6 @@ ks_returns_count l_events_publish(Ks_Script_Ctx ctx) {
     return 0;
 }
 
-struct LuaSubInfo {
-    Ks_Script_Ctx ctx;
-    Ks_Script_Ref func_ref;
-};
 ks_bool lua_subscriber_thunk(Ks_Event_Payload data, ks_ptr user_data) {
     LuaSubInfo* info = (LuaSubInfo*)user_data;
     Ks_Script_Ctx ctx = info->ctx;
@@ -196,7 +200,7 @@ ks_returns_count l_events_subscribe(Ks_Script_Ctx ctx) {
     double h_val = ks_script_obj_as_number(ctx, ks_script_get_arg(ctx, 1));
     Ks_Script_Object func = ks_script_get_arg(ctx, 2);
 
-    LuaSubInfo* info = (LuaSubInfo*)ks_alloc(sizeof(LuaSubInfo), KS_LT_PERMANENT, KS_TAG_SCRIPT);
+    LuaSubInfo* info = (LuaSubInfo*)ks_alloc(sizeof(LuaSubInfo), KS_LT_USER_MANAGED, KS_TAG_SCRIPT);
     info->ctx = ctx;
 
     ks_script_promote(ctx, func);
@@ -204,8 +208,40 @@ ks_returns_count l_events_subscribe(Ks_Script_Ctx ctx) {
 
     Ks_Handle sub = ks_event_manager_subscribe(em, (Ks_Handle)h_val, lua_subscriber_thunk, info);
 
+    {
+        std::lock_guard<std::mutex> lock(s_subs_mutex);
+        s_lua_subscriptions[(ks_uint32)sub] = info;
+    }
+
     ks_script_stack_push_obj(ctx, ks_script_create_number(ctx, (double)sub));
     return 1;
+}
+
+ks_returns_count l_events_unsubscribe(Ks_Script_Ctx ctx) {
+    Ks_EventManager em = get_em(ctx);
+    double h_val = ks_script_obj_as_number(ctx, ks_script_get_arg(ctx, 1));
+    Ks_Handle sub = (Ks_Handle)h_val;
+
+    ks_event_manager_unsubscribe(em, sub);
+
+    {
+        std::lock_guard<std::mutex> lock(s_subs_mutex);
+        auto it = s_lua_subscriptions.find((ks_uint32)sub);
+        if (it != s_lua_subscriptions.end()) {
+            LuaSubInfo* info = it->second;
+
+            Ks_Script_Object func_ref;
+            func_ref.val.function_ref = info->func_ref;
+            func_ref.state = KS_SCRIPT_OBJECT_VALID;
+            func_ref.type = KS_TYPE_SCRIPT_FUNCTION;
+
+            ks_script_free_obj(ctx, func_ref);
+
+            ks_dealloc(info);
+            s_lua_subscriptions.erase(it);
+        }
+    }
+    return 0;
 }
 
 KS_API ks_no_ret ks_event_manager_lua_bind(Ks_EventManager em, Ks_Script_Ctx ctx) {
@@ -214,13 +250,23 @@ KS_API ks_no_ret ks_event_manager_lua_bind(Ks_EventManager em, Ks_Script_Ctx ctx
 
     auto reg = [&](const char* n, ks_script_cfunc f) {
         ks_script_stack_push_obj(ctx, em_obj);
-        // UPDATED: Nuova sintassi macro
         Ks_Script_Function fn_obj = ks_script_create_cfunc_with_upvalues(ctx, KS_SCRIPT_FUNC_VOID(f), 1);
         ks_script_table_set(ctx, tbl, ks_script_create_cstring(ctx, n), fn_obj);
     };
 
     reg("register", l_events_register);
     reg("subscribe", l_events_subscribe);
+    reg("unsubscribe", l_events_unsubscribe);
     reg("publish", l_events_publish);
     reg("get", l_events_get);
+}
+
+KS_API ks_no_ret ks_event_manager_lua_shutdown(Ks_EventManager em) {
+    std::lock_guard<std::mutex> lock(s_subs_mutex);
+
+    for (auto& [handle, info] : s_lua_subscriptions) {
+        ks_event_manager_unsubscribe(em, (Ks_Handle)handle);
+        ks_dealloc(info);
+    }
+    s_lua_subscriptions.clear();
 }

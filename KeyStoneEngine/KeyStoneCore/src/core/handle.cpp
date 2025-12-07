@@ -19,8 +19,9 @@ public:
     ks_uint8 register_type(const char* name) {
         std::lock_guard<std::mutex> lock(mtx);
 
-        for (const auto& pair : type_map) {
-            if (pair.second == name) return pair.first;
+        auto it = name_to_id.find(name);
+        if (it != name_to_id.end()) {
+            return it->second;
         }
 
         if (next_type_id > 255) {
@@ -29,7 +30,8 @@ public:
         }
 
         ks_uint8 id = (ks_uint8)next_type_id++;
-        type_map[id] = name;
+        id_to_name[id] = name;
+        name_to_id[name] = id;
 
         if (counters.size() <= id) {
             counters.resize(id + 1, 1);
@@ -57,14 +59,16 @@ public:
 
     const char* get_name(ks_uint8 id) {
         std::lock_guard<std::mutex> lock(mtx);
-        auto type = type_map.find(id);
-        if (type == type_map.end()) return nullptr;
-        return type->second.c_str();
+        auto it = id_to_name.find(id);
+        if (it == id_to_name.end()) return nullptr;
+        return it->second.c_str();
     }
 
     ks_uint8 get_id(ks_str name) {
-        for (const auto& pair : type_map) {
-            if (pair.second == name) return pair.first;
+        std::lock_guard<std::mutex> lock(mtx);
+        auto it = name_to_id.find(name);
+        if (it != name_to_id.end()) {
+            return it->second;
         }
         return KS_INVALID_ID;
     }
@@ -73,7 +77,8 @@ private:
 	HandleTypeRegistry() = default;
 	std::mutex mtx;
 	int next_type_id = 1;
-    std::unordered_map<ks_uint8, std::string> type_map;
+    std::unordered_map<ks_uint8, std::string> id_to_name;
+    std::unordered_map<std::string, ks_uint8> name_to_id;
     std::vector<ks_uint32> counters;
 };
 

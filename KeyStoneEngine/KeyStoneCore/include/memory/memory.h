@@ -40,6 +40,21 @@ enum Ks_Tag {
     KS_TAG_COUNT          ///< Total number of tags.
 };
 
+struct Ks_Tag_Stats {
+    size_t count = 0;
+    size_t total_size = 0;
+};
+
+struct Ks_Memory_Stats {
+    size_t total_allocated = 0;
+    size_t frame_used = 0;
+    size_t frame_capacity = 0;
+    size_t permanent_allocated = 0;
+    size_t resource_pools_used = 0;
+    size_t resource_pools_capacity = 0;
+    Ks_Tag_Stats tag_stats[KS_TAG_COUNT];
+};
+
 /**
  * @brief Initializes the memory management system.
  * * Must be called before any other memory operation.
@@ -52,6 +67,8 @@ KS_API ks_no_ret ks_memory_init();
  */
 KS_API ks_no_ret ks_memory_shutdown();
 
+KS_API Ks_Memory_Stats ks_memory_get_stats();
+ 
 /**
  * @brief Allocates a block of memory.
  *

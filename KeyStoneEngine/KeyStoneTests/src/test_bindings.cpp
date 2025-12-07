@@ -213,6 +213,36 @@ TEST_CASE("Managers-Lua bindings Tests") {
         CHECK(table_verified == true);
     }
 
+    SUBCASE("Event Manager: Lua Unsubscribe & Memory Leak Check") {
+        auto stats_before = ks_memory_get_stats();
+        size_t perm_alloc_before = stats_before.permanent_allocated;
+
+        const char* script = R"(
+            local h = events.register("LeakTest", {type.INT})
+            local count = 0
+            
+            local sub = events.subscribe(h, function(val)
+                count = count + val
+            end)
+            
+            events.publish(h, 10)
+            
+            events.unsubscribe(sub)
+            
+            events.publish(h, 50)
+            
+            return count
+        )";
+
+        Ks_Script_Function_Call_Result res = ks_script_do_cstring(ctx, script);
+        CHECK(ks_script_call_succeded(ctx, res));
+
+        CHECK(ks_script_obj_as_integer(ctx, ks_script_call_get_return(ctx, res)) == 10);
+
+        auto stats_after = ks_memory_get_stats();
+        CHECK(stats_after.permanent_allocated == perm_alloc_before);
+    }
+
     SUBCASE("State Manager Integration") {
         ks_script_begin_scope(ctx);
 
@@ -285,6 +315,8 @@ TEST_CASE("Managers-Lua bindings Tests") {
     ks_state_manager_destroy(sm);
 
     ks_assets_manager_destroy(am);
+
+    ks_event_manager_lua_shutdown(em);
 
     ks_event_manager_destroy(em);
 

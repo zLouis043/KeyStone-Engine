@@ -84,13 +84,13 @@ Ks_AssetData AssetManager_Impl::get_asset_data_from_handle(Ks_Handle handle)
 std::string AssetManager_Impl::get_asset_name_from_handle(Ks_Handle handle)
 {
 	auto found = assets_entries.find(handle);
-	if (found == assets_entries.end()) return "nullptr";
+	if (found == assets_entries.end()) return "";
 	return found->second.asset_name;
 }
 
 std::string& AssetManager_Impl::get_asset_type_from_handle(Ks_Handle handle)
 {
-	static std::string empty = "nullptr";
+	static std::string empty = "";
 	auto found = assets_entries.find(handle);
 	if (found == assets_entries.end()) return empty;
 	return found->second.type_name;
@@ -140,9 +140,8 @@ void AssetManager_Impl::release_asset(Ks_Handle handle)
 			}
 		}
 
+		std::string asset_name = entry.asset_name;
 		assets_entries.erase(found);
-
-		std::string asset_name = get_asset_name_from_handle(handle);
 		assets_name_to_handle.erase(asset_name);
 	}
 }

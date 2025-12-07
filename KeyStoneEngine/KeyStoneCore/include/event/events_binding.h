@@ -9,6 +9,7 @@ extern "C" {
 #endif
 
 KS_API ks_no_ret ks_event_manager_lua_bind(Ks_EventManager em, Ks_Script_Ctx ctx);
+KS_API ks_no_ret ks_event_manager_lua_shutdown(Ks_EventManager em);
 
 #ifdef __cplusplus
 }

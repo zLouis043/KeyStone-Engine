@@ -225,7 +225,7 @@ KS_API Ks_Handle ks_state_manager_new_float(Ks_StateManager sm, ks_str name, ks_
 }
 
 KS_API Ks_Handle ks_state_manager_new_bool(Ks_StateManager sm, ks_str name, ks_bool value) {
-    return ((StateManager_Impl*)sm)->create_or_update(name, KS_TYPE_BOOL, (ks_bool)value);
+    return ((StateManager_Impl*)sm)->create_or_update(name, KS_TYPE_BOOL, (bool)value);
 }
 
 KS_API Ks_Handle ks_state_manager_new_string(Ks_StateManager sm, ks_str name, ks_str value) {
@@ -257,7 +257,7 @@ KS_API ks_double ks_state_get_float(Ks_StateManager sm, Ks_Handle handle) {
 }
 
 KS_API ks_bool ks_state_get_bool(Ks_StateManager sm, Ks_Handle handle) {
-    return ((StateManager_Impl*)sm)->get_val_or(handle, KS_TYPE_BOOL, (ks_bool)false);
+    return ((StateManager_Impl*)sm)->get_val_or(handle, KS_TYPE_BOOL, (bool)false);
 }
 
 KS_API ks_str ks_state_get_string(Ks_StateManager sm, Ks_Handle handle) {
@@ -275,7 +275,7 @@ KS_API ks_double ks_state_get_float_or(Ks_StateManager sm, Ks_Handle handle, ks_
     return ((StateManager_Impl*)sm)->get_val_or(handle, KS_TYPE_DOUBLE, def);
 }
 KS_API ks_bool ks_state_get_bool_or(Ks_StateManager sm, Ks_Handle handle, ks_bool def) {
-    return ((StateManager_Impl*)sm)->get_val_or(handle, KS_TYPE_BOOL, (ks_bool)def);
+    return ((StateManager_Impl*)sm)->get_val_or(handle, KS_TYPE_BOOL, (bool)def);
 }
 KS_API ks_str ks_state_get_string_or(Ks_StateManager sm, Ks_Handle handle, ks_str def) {
     return ((StateManager_Impl*)sm)->get_val_or(handle, KS_TYPE_CSTRING, def);
@@ -298,7 +298,7 @@ KS_API ks_bool ks_state_set_float(Ks_StateManager sm, Ks_Handle handle, ks_doubl
 }
 
 KS_API ks_bool ks_state_set_bool(Ks_StateManager sm, Ks_Handle handle, ks_bool value) {
-    return ((StateManager_Impl*)sm)->set_value(handle, KS_TYPE_BOOL, (ks_bool)value);
+    return ((StateManager_Impl*)sm)->set_value(handle, KS_TYPE_BOOL, (bool)value);
 }
 
 KS_API ks_bool ks_state_set_string(Ks_StateManager sm, Ks_Handle handle, ks_str value) {

@@ -11,6 +11,22 @@ ks_no_ret ks_memory_shutdown(){
     MemoryManager::shutdown();
 }
 
+Ks_Memory_Stats ks_memory_get_stats()
+{
+    auto stats = MemoryManager::get_instance().get_stats();
+
+    Ks_Memory_Stats result; 
+    result.frame_capacity = stats.frame_capacity;
+    result.frame_used = stats.frame_used;
+    result.permanent_allocated = stats.permanent_allocated;
+    result.resource_pools_capacity = stats.resource_pools_capacity;
+    result.resource_pools_used = stats.resource_pools_used;
+    
+    memcpy((void*)&result.tag_stats, (void*)&stats.tag_stats, sizeof(Ks_Tag_Stats));
+    result.total_allocated = stats.total_allocated;
+    return result;
+}
+
 static MemoryManager::Lifetime ks_to_lt(Ks_Lifetime lt){
     switch(lt){
         case KS_LT_USER_MANAGED: return MemoryManager::Lifetime::USER_MANAGED;
