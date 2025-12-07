@@ -1,7 +1,8 @@
 #include "memory/memory.h"
 #include "memory/memory.hpp"
-
 #include "core/log.h"
+
+#include <string.h>
 
 ks_no_ret ks_memory_init(){
     MemoryManager::get_instance(); 

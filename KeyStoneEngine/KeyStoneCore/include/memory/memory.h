@@ -41,17 +41,17 @@ enum Ks_Tag {
 };
 
 struct Ks_Tag_Stats {
-    size_t count = 0;
-    size_t total_size = 0;
+    size_t count;
+    size_t total_size;
 };
 
 struct Ks_Memory_Stats {
-    size_t total_allocated = 0;
-    size_t frame_used = 0;
-    size_t frame_capacity = 0;
-    size_t permanent_allocated = 0;
-    size_t resource_pools_used = 0;
-    size_t resource_pools_capacity = 0;
+    size_t total_allocated;
+    size_t frame_used;
+    size_t frame_capacity;
+    size_t permanent_allocated;
+    size_t resource_pools_used;
+    size_t resource_pools_capacity;
     Ks_Tag_Stats tag_stats[KS_TAG_COUNT];
 };
 
