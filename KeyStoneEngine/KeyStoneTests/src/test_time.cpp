@@ -46,7 +46,7 @@ TEST_CASE("C API: Time Manager Core") {
         
         ks_time_manager_update(tm); 
 
-        Ks_Handle h = ks_timer_create(tm, 200000000ULL, ks_false);  200ms
+        Ks_Handle h = ks_timer_create(tm, 200000000ULL, ks_false);  //200ms
         ctx.handle_ref = h;
 
         ks_timer_set_callback(tm, h, c_timer_callback, &ctx);
