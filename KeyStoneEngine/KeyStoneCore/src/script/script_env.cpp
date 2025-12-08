@@ -129,6 +129,7 @@ struct ScriptEnv_Impl {
 
     void update() {
         ks_file_watcher_poll(file_watcher);
+        ks_assets_manager_update(assets_mgr);
 
         if (!pending_reloads.empty()) {
             for (const auto& path : pending_reloads) {

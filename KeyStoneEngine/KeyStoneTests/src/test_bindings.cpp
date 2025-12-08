@@ -1,6 +1,9 @@
 #include <doctest/doctest.h>
 #include <keystone.h>
 #include <string.h>
+#include <fstream>
+#include <cstdio>
+#include <thread>
 
 #include "../include/common.h"
 
@@ -39,6 +42,11 @@ ks_returns_count test_set_received(Ks_Script_Ctx ctx) {
     if (s) g_c_str_val = s;
     g_c_call_count++;
     return 0;
+}
+static void write_script_file(const char* path, const char* content) {
+    std::ofstream out(path);
+    out << content;
+    out.close();
 }
 
 TEST_CASE("Managers-Lua bindings Tests") {
@@ -310,6 +318,66 @@ TEST_CASE("Managers-Lua bindings Tests") {
         CHECK(((GameConfig*)ptr)->difficulty == 5);
 
         ks_script_end_scope(ctx);
+    }
+
+    SUBCASE("ScriptEnv: Granular Dependency Reloading") {
+        Ks_EventManager em = ks_event_manager_create();
+        Ks_StateManager sm = ks_state_manager_create();
+        Ks_AssetsManager am = ks_assets_manager_create();
+
+        Ks_ScriptEnv env = ks_script_env_create(em, sm, am);
+
+        const char* main_path = "env_main.lua";
+        const char* lib_path = "env_lib.lua";
+
+        write_script_file(lib_path, R"(
+            local s = state("lib_value", 0)
+            s:set(10)
+            return "LibVersion1"
+        )");
+
+        write_script_file(main_path, R"(
+            require("env_lib")
+            
+            local s_run = state("main_run_count", 0)
+            s_run:set(s_run:get() + 1)
+        )");
+
+        ks_script_env_init(env, main_path);
+
+        CHECK(ks_state_get_int(sm, ks_state_manager_get_handle(sm, "main_run_count")) == 1);
+        CHECK(ks_state_get_int(sm, ks_state_manager_get_handle(sm, "lib_value")) == 10);
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(1100));
+
+        write_script_file(lib_path, R"(
+            local s = state("lib_value")
+            s:set(999)
+            return "LibVersion2"
+        )");
+
+        bool reloaded = false;
+        for (int i = 0; i < 30; ++i) {
+            ks_script_env_update(env);
+
+            if (ks_state_get_int(sm, ks_state_manager_get_handle(sm, "lib_value")) == 999) {
+                reloaded = true;
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+
+        CHECK(reloaded == true);
+
+        CHECK(ks_state_get_int(sm, ks_state_manager_get_handle(sm, "main_run_count")) == 1);
+
+        ks_script_env_destroy(env);
+        ks_assets_manager_destroy(am);
+        ks_state_manager_destroy(sm);
+        ks_event_manager_destroy(em);
+
+        std::remove(main_path);
+        std::remove(lib_path);
     }
 
     ks_state_manager_destroy(sm);
