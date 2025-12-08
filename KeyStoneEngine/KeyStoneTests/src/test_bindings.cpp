@@ -73,6 +73,9 @@ TEST_CASE("Managers-Lua bindings Tests") {
     Ks_StateManager sm = ks_state_manager_create();
     ks_state_manager_lua_bind(sm, ctx);
 
+    Ks_TimeManager tm = ks_time_manager_create();
+    ks_time_manager_lua_bind(ctx, tm);
+
 	SUBCASE("Assets Manager Lua Bindings") {
 		Ks_IAsset interface;
 		interface.load_from_file_fn = my_asset_load_file;
@@ -320,12 +323,56 @@ TEST_CASE("Managers-Lua bindings Tests") {
         ks_script_end_scope(ctx);
     }
 
-    SUBCASE("ScriptEnv: Granular Dependency Reloading") {
-        Ks_EventManager em = ks_event_manager_create();
-        Ks_StateManager sm = ks_state_manager_create();
-        Ks_AssetsManager am = ks_assets_manager_create();
+    SUBCASE("Time Manager & Lua Timers") {
+        const char* script_conv = R"(
+            local sec = time.seconds(1.5)
+            local ms = time.milliseconds(500)
+            return sec, ms
+        )";
+        auto res = ks_script_do_cstring(ctx, script_conv);
+        CHECK(ks_script_call_succeded(ctx, res));
+        CHECK(ks_script_obj_as_integer(ctx, ks_script_call_get_return_at(ctx, res, 1)) == 1500000000LL);
+        CHECK(ks_script_obj_as_integer(ctx, ks_script_call_get_return_at(ctx, res, 2)) == 500000000LL);
 
-        Ks_ScriptEnv env = ks_script_env_create(em, sm, am);
+        Ks_Handle h_state = ks_state_manager_new_int(sm, "lua_timer_fired", 0);
+
+        const char* script_timer = R"(
+            local t = time.create_timer()
+            
+            t:set_duration(time.milliseconds(50))
+            t:set_loop(false)
+            
+            t:set_function(function()
+                local s = state("lua_timer_fired")
+                s:set(1)
+            end)
+            
+            t:start()
+            return t
+        )";
+
+        ks_script_do_cstring(ctx, script_timer);
+
+        CHECK(ks_state_get_int(sm, h_state) == 0);
+
+        for (int i = 0; i < 3; i++) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            ks_time_manager_update(tm);
+            ks_time_manager_process_timers(tm);
+        }
+
+        CHECK(ks_state_get_int(sm, h_state) == 1);
+
+        
+    }
+
+    SUBCASE("ScriptEnv: Granular Dependency Reloading") {
+        Ks_EventManager em2 = ks_event_manager_create();
+        Ks_StateManager sm2 = ks_state_manager_create();
+        Ks_AssetsManager am2 = ks_assets_manager_create();
+        Ks_TimeManager tm2 = ks_time_manager_create();
+
+        Ks_ScriptEnv env = ks_script_env_create(em2, sm2, am2, tm2);
 
         const char* main_path = "env_main.lua";
         const char* lib_path = "env_lib.lua";
@@ -345,8 +392,8 @@ TEST_CASE("Managers-Lua bindings Tests") {
 
         ks_script_env_init(env, main_path);
 
-        CHECK(ks_state_get_int(sm, ks_state_manager_get_handle(sm, "main_run_count")) == 1);
-        CHECK(ks_state_get_int(sm, ks_state_manager_get_handle(sm, "lib_value")) == 10);
+        CHECK(ks_state_get_int(sm2, ks_state_manager_get_handle(sm2, "main_run_count")) == 1);
+        CHECK(ks_state_get_int(sm2, ks_state_manager_get_handle(sm2, "lib_value")) == 10);
 
         std::this_thread::sleep_for(std::chrono::milliseconds(1100));
 
@@ -360,7 +407,7 @@ TEST_CASE("Managers-Lua bindings Tests") {
         for (int i = 0; i < 30; ++i) {
             ks_script_env_update(env);
 
-            if (ks_state_get_int(sm, ks_state_manager_get_handle(sm, "lib_value")) == 999) {
+            if (ks_state_get_int(sm2, ks_state_manager_get_handle(sm2, "lib_value")) == 999) {
                 reloaded = true;
                 break;
             }
@@ -369,16 +416,18 @@ TEST_CASE("Managers-Lua bindings Tests") {
 
         CHECK(reloaded == true);
 
-        CHECK(ks_state_get_int(sm, ks_state_manager_get_handle(sm, "main_run_count")) == 1);
+        CHECK(ks_state_get_int(sm2, ks_state_manager_get_handle(sm2, "main_run_count")) == 1);
 
         ks_script_env_destroy(env);
-        ks_assets_manager_destroy(am);
-        ks_state_manager_destroy(sm);
-        ks_event_manager_destroy(em);
+        ks_assets_manager_destroy(am2);
+        ks_state_manager_destroy(sm2);
+        ks_event_manager_destroy(em2);
 
         std::remove(main_path);
         std::remove(lib_path);
     }
+
+    ks_time_manager_destroy(tm);
 
     ks_state_manager_destroy(sm);
 

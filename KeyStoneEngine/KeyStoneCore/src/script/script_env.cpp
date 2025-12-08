@@ -5,6 +5,7 @@
 #include "../../include/event/events_binding.h"
 #include "../../include/asset/assets_binding.h"
 #include "../../include/state/state_binding.h"
+#include "../../include/time/time_binding.h"
 #include "../../include/filesystem/file_watcher.h"
 
 #include <string>
@@ -16,6 +17,7 @@ struct ScriptEnv_Impl {
     Ks_EventManager event_mgr;
     Ks_StateManager state_mgr;
     Ks_AssetsManager assets_mgr;
+    Ks_TimeManager time_mgr;
 
     Ks_Script_Ctx script_ctx = nullptr;
     Ks_FileWatcher file_watcher = nullptr;
@@ -25,8 +27,8 @@ struct ScriptEnv_Impl {
     std::unordered_map<std::string, std::string> path_to_module;
     std::vector<std::string> pending_reloads;
 
-    ScriptEnv_Impl(Ks_EventManager em, Ks_StateManager sm, Ks_AssetsManager am)
-        : event_mgr(em), state_mgr(sm), assets_mgr(am)
+    ScriptEnv_Impl(Ks_EventManager em, Ks_StateManager sm, Ks_AssetsManager am, Ks_TimeManager tm)
+        : event_mgr(em), state_mgr(sm), assets_mgr(am), time_mgr(tm)
     {
         file_watcher = ks_file_watcher_create();
     }
@@ -34,6 +36,7 @@ struct ScriptEnv_Impl {
     ~ScriptEnv_Impl() {
         if (script_ctx) {
             ks_event_manager_lua_shutdown(event_mgr);
+            ks_time_manager_binding_shutdown(time_mgr);
             ks_script_destroy_ctx(script_ctx);
         }
         ks_file_watcher_destroy(file_watcher);
@@ -110,6 +113,7 @@ struct ScriptEnv_Impl {
         ks_event_manager_lua_bind(event_mgr, script_ctx);
         ks_state_manager_lua_bind(state_mgr, script_ctx);
         ks_assets_manager_lua_bind(script_ctx, assets_mgr);
+        ks_time_manager_lua_bind(script_ctx, time_mgr);
 
         install_dev_searcher();
     }
@@ -130,6 +134,7 @@ struct ScriptEnv_Impl {
     void update() {
         ks_file_watcher_poll(file_watcher);
         ks_assets_manager_update(assets_mgr);
+        ks_time_manager_update(time_mgr);
 
         if (!pending_reloads.empty()) {
             for (const auto& path : pending_reloads) {
@@ -140,11 +145,11 @@ struct ScriptEnv_Impl {
     }
 };
 
-KS_API Ks_ScriptEnv ks_script_env_create(Ks_EventManager em, Ks_StateManager sm, Ks_AssetsManager am) {
+KS_API Ks_ScriptEnv ks_script_env_create(Ks_EventManager em, Ks_StateManager sm, Ks_AssetsManager am, Ks_TimeManager tm) {
 
     void* raw_data = ks_alloc_debug(sizeof(ScriptEnv_Impl), KS_LT_USER_MANAGED, KS_TAG_INTERNAL_DATA, "KsScriptEnvImpl");
 
-    return (Ks_ScriptEnv) new(raw_data) ScriptEnv_Impl(em, sm, am);
+    return (Ks_ScriptEnv) new(raw_data) ScriptEnv_Impl(em, sm, am, tm);
 }
 
 KS_API ks_no_ret ks_script_env_destroy(Ks_ScriptEnv env) {
