@@ -2,12 +2,97 @@
 
 #include <string.h>
 
+struct AssetProxy {
+    Ks_Handle handle;
+    Ks_AssetsManager am;
+};
+
 static Ks_AssetsManager get_am_from_upvalue(Ks_Script_Ctx ctx) {
     Ks_Script_Object upval = ks_script_func_get_upvalue(ctx, 1);
     void* impl_ptr = ks_script_lightuserdata_get_ptr(ctx, upval);
     Ks_AssetsManager am;
     am.impl = impl_ptr;
     return am;
+}
+
+ks_returns_count l_asset_proxy_index(Ks_Script_Ctx ctx) {
+    Ks_Script_Object proxy_obj = ks_script_get_arg(ctx, 1);
+    auto* proxy = (AssetProxy*)ks_script_usertype_get_ptr(ctx, proxy_obj);
+
+    if (!proxy) return 0;
+
+    Ks_Script_Object key = ks_script_get_arg(ctx, 2);
+
+    void* ptr = ks_assets_manager_get_data(proxy->am, proxy->handle);
+    if (!ptr) {
+        ks_script_stack_push_obj(ctx, ks_script_create_nil(ctx));
+        return 1;
+    }
+
+    const char* type_name = ks_assets_manager_get_type_name(proxy->am, proxy->handle);
+
+    Ks_Script_Object ref = ks_script_create_usertype_ref(ctx, type_name, ptr);
+
+    Ks_Script_Object result = ks_script_table_get(ctx, ref, key);
+
+    ks_script_stack_push_obj(ctx, result);
+    return 1;
+}
+
+ks_returns_count l_asset_proxy_newindex(Ks_Script_Ctx ctx) {
+    Ks_Script_Object proxy_obj = ks_script_get_arg(ctx, 1);
+    auto* proxy = (AssetProxy*)ks_script_usertype_get_ptr(ctx, proxy_obj);
+    if (!proxy) return 0;
+
+    Ks_Script_Object key = ks_script_get_arg(ctx, 2);
+    Ks_Script_Object val = ks_script_get_arg(ctx, 3);
+
+    void* ptr = ks_assets_manager_get_data(proxy->am, proxy->handle);
+    if (!ptr) return 0;
+
+    const char* type_name = ks_assets_manager_get_type_name(proxy->am, proxy->handle);
+
+    Ks_Script_Object ref = ks_script_create_usertype_ref(ctx, type_name, ptr);
+
+    ks_script_table_set(ctx, ref, key, val);
+
+    return 0;
+}
+
+ks_returns_count l_asset_proxy_eq(Ks_Script_Ctx ctx) {
+    Ks_Script_Object obj1 = ks_script_get_arg(ctx, 1);
+    Ks_Script_Object obj2 = ks_script_get_arg(ctx, 2);
+
+    if (obj1.type != KS_TYPE_USERDATA || obj2.type != KS_TYPE_USERDATA) {
+        ks_script_stack_push_boolean(ctx, false);
+        return 1;
+    }
+
+    auto* p1 = (AssetProxy*)ks_script_usertype_get_ptr(ctx, obj1);
+    auto* p2 = (AssetProxy*)ks_script_usertype_get_ptr(ctx, obj2);
+
+    bool are_equal = (p1 && p2) &&
+        (p1->handle == p2->handle);
+
+    ks_script_stack_push_boolean(ctx, are_equal);
+    return 1;
+}
+
+static Ks_Handle extract_handle(Ks_Script_Ctx ctx, int arg_idx) {
+    Ks_Script_Object obj = ks_script_get_arg(ctx, arg_idx);
+
+    if (obj.type == KS_TYPE_USERDATA) {
+        auto* proxy = (AssetProxy*)ks_script_usertype_get_ptr(ctx, obj);
+        if (proxy) return proxy->handle;
+    }
+    else if (obj.type == KS_TYPE_INT) {
+        return (Ks_Handle)ks_script_obj_as_integer(ctx, obj);
+    }
+    else if (obj.type == KS_TYPE_DOUBLE) {
+        return (Ks_Handle)ks_script_obj_as_number(ctx, obj);
+    }
+
+    return KS_INVALID_HANDLE;
 }
 
 ks_returns_count l_assets_load(Ks_Script_Ctx ctx) {
@@ -25,23 +110,30 @@ ks_returns_count l_assets_load(Ks_Script_Ctx ctx) {
         handle = ks_assets_manager_load_asset_from_file(am, type, name, path);
     }
     else {
-        // HERE SHOULD GO THE OVERLOAD TO LOAD DATA FROM RAW/USERDATA
+        // TODO: HERE SHOULD GO THE OVERLOAD TO LOAD DATA FROM RAW/USERDATA
         // handle = ks_assets_manager_load_asset_from_data(...)
     }
 
-    ks_script_stack_push_integer(ctx, (ks_int64)handle);
+    Ks_Script_Userdata ud = ks_script_create_usertype_instance(ctx, "AssetHandle");
+
+    auto* proxy = (AssetProxy*)ks_script_usertype_get_ptr(ctx, ud);
+    if (proxy) {
+        proxy->handle = handle;
+        proxy->am = am;
+    }
+
+    ks_script_stack_push_obj(ctx, ud);
     return 1;
 }
 
 ks_returns_count l_assets_valid(Ks_Script_Ctx ctx) {
     Ks_AssetsManager am = get_am_from_upvalue(ctx);
 
-    double h_val = ks_script_obj_as_number(ctx, ks_script_get_arg(ctx, 1));
-    Ks_Handle handle = (Ks_Handle)h_val;
+    Ks_Handle handle = extract_handle(ctx, 1);
 
     ks_bool is_valid = ks_assets_is_handle_valid(am, handle);
 
-    ks_script_stack_push_obj(ctx, ks_script_create_number(ctx, is_valid ? 1 : 0));
+    ks_script_stack_push_obj(ctx, ks_script_create_integer(ctx, is_valid ? 1 : 0));
     return 1;
 }
 
@@ -51,15 +143,22 @@ ks_returns_count l_assets_get(Ks_Script_Ctx ctx) {
     const char* name = ks_script_obj_as_cstring(ctx, ks_script_get_arg(ctx, 1));
     Ks_Handle handle = ks_assets_manager_get_asset(am, name);
 
-    ks_script_stack_push_obj(ctx, ks_script_create_number(ctx, (double)handle));
+    Ks_Script_Userdata ud = ks_script_create_usertype_instance(ctx, "AssetHandle");
+
+    auto* proxy = (AssetProxy*)ks_script_usertype_get_ptr(ctx, ud);
+    if (proxy) {
+        proxy->handle = handle;
+        proxy->am = am;
+    }
+
+    ks_script_stack_push_obj(ctx, ud);
     return 1;
 }
 
 ks_returns_count l_assets_get_data(Ks_Script_Ctx ctx) {
     Ks_AssetsManager am = get_am_from_upvalue(ctx);
 
-    ks_int64 h_val = ks_script_obj_as_integer(ctx, ks_script_get_arg(ctx, 1));
-    Ks_Handle handle = (Ks_Handle)h_val;
+    Ks_Handle handle = extract_handle(ctx, 1);
 
     void* ptr = ks_assets_manager_get_data(am, handle);
 
@@ -83,6 +182,12 @@ ks_returns_count l_assets_get_data(Ks_Script_Ctx ctx) {
 
 KS_API ks_no_ret ks_assets_manager_lua_bind(Ks_Script_Ctx ctx, Ks_AssetsManager am) {
     Ks_Script_Object am_upval = ks_script_create_lightuserdata(ctx, am.impl);
+
+    auto b = ks_script_usertype_begin(ctx, "AssetHandle", sizeof(AssetProxy));
+    ks_script_usertype_add_metamethod(b, KS_SCRIPT_MT_INDEX, l_asset_proxy_index);
+    ks_script_usertype_add_metamethod(b, KS_SCRIPT_MT_NEWINDEX, l_asset_proxy_newindex);
+    ks_script_usertype_add_metamethod(b, KS_SCRIPT_MT_EQ, l_asset_proxy_eq);
+    ks_script_usertype_end(b);
 
     Ks_Script_Table assets_tbl = ks_script_create_named_table(ctx, "assets");
 

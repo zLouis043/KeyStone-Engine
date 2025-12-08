@@ -912,16 +912,23 @@ KS_API ks_no_ret ks_script_usertype_end(Ks_Script_Userytype_Builder builder)
         lua_settable(L, setters_tbl_idx);
     }
 
-    lua_pushstring(L, "__index");
-    lua_pushvalue(L, methods_tbl_idx);
-    lua_pushvalue(L, getters_tbl_idx);
-    lua_pushcclosure(L, usertype_index_thunk, 2);
-    lua_settable(L, mt_idx);
+    bool has_custom_index = (b->metamethods.find(KS_SCRIPT_MT_INDEX) != b->metamethods.end());
+    bool has_custom_newindex = (b->metamethods.find(KS_SCRIPT_MT_NEWINDEX) != b->metamethods.end());
 
-    lua_pushstring(L, "__newindex");
-    lua_pushvalue(L, setters_tbl_idx);
-    lua_pushcclosure(L, usertype_newindex_thunk, 1);
-    lua_settable(L, mt_idx);
+    if (!has_custom_index) {
+        lua_pushstring(L, "__index");
+        lua_pushvalue(L, methods_tbl_idx);
+        lua_pushvalue(L, getters_tbl_idx);
+        lua_pushcclosure(L, usertype_index_thunk, 2);
+        lua_settable(L, mt_idx);
+    }
+
+    if (!has_custom_newindex) {
+        lua_pushstring(L, "__newindex");
+        lua_pushvalue(L, setters_tbl_idx);
+        lua_pushcclosure(L, usertype_newindex_thunk, 1);
+        lua_settable(L, mt_idx);
+    }
 
     lua_newtable(L); int class_tbl_idx = lua_gettop(L);
 
@@ -2512,6 +2519,8 @@ KS_API ks_no_ret ks_script_func_call(Ks_Script_Ctx ctx, Ks_Script_Function f, ks
 
 static const char* ks_metamethod_to_str(Ks_Script_Metamethod mt) {
     switch (mt) {
+    case KS_SCRIPT_MT_INDEX: return "__index";
+    case KS_SCRIPT_MT_NEWINDEX: return "__newindex";
     case KS_SCRIPT_MT_ADD: return "__add";
     case KS_SCRIPT_MT_SUB: return "__sub";
     case KS_SCRIPT_MT_MUL: return "__mul";

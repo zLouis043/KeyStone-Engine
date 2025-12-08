@@ -76,7 +76,7 @@ TEST_CASE("Managers-Lua bindings Tests") {
     Ks_TimeManager tm = ks_time_manager_create();
     ks_time_manager_lua_bind(ctx, tm);
 
-	SUBCASE("Assets Manager Lua Bindings") {
+	SUBCASE("Assets Manager: Test Lua Bindings") {
 		Ks_IAsset interface;
 		interface.load_from_file_fn = my_asset_load_file;
 		interface.destroy_fn = my_asset_destroy;
@@ -111,10 +111,62 @@ TEST_CASE("Managers-Lua bindings Tests") {
             FAIL(ks_script_get_last_error_str(ctx));
         }
 
-        const char* ret_str = ks_script_obj_as_cstring(ctx, ks_script_call_get_return_at(ctx, res, 2));
+        ks_str ret_str = ks_script_obj_as_cstring(ctx, ks_script_call_get_return_at(ctx, res, 2));
         REQUIRE(ret_str != nullptr);
         CHECK(strcmp(ret_str, "Success") == 0);
 	}
+
+    SUBCASE("Assets Manager: Transparent Proxy & Hot Reload") {
+        struct MyTestAsset { int id; float value; };
+
+        Ks_IAsset interface;
+        interface.load_from_file_fn = [](ks_str file_path) -> void* {
+            auto* a = new MyTestAsset();
+            a->id = 100;
+            a->value = 3.14f;
+            return a;
+        };
+        interface.destroy_fn = [](ks_ptr data) {
+            delete (MyTestAsset*)data;
+        };
+
+        ks_assets_manager_register_asset_type(am, "MyTestAsset", interface);
+
+        auto b = ks_script_usertype_begin(ctx, "MyTestAsset", sizeof(MyTestAsset));
+        ks_script_usertype_add_field(b, "id", KS_TYPE_INT, offsetof(MyTestAsset, id), nullptr);
+        ks_script_usertype_add_field(b, "value", KS_TYPE_FLOAT, offsetof(MyTestAsset, value), nullptr);
+        ks_script_usertype_end(b);
+
+        const char* script = R"(
+            local asset = assets.load("MyTestAsset", "test_item", "dummy_path")
+       
+            if assets.valid(asset) == 0 then return "Load Failed" end
+            local val1 = asset.id
+            asset.value = 90.5
+           
+            return val1, asset.value
+        )";
+
+        Ks_Script_Function_Call_Result res = ks_script_do_cstring(ctx, script);
+        CHECK(ks_script_call_succeded(ctx, res));
+        CHECK(ks_script_obj_as_integer(ctx, ks_script_call_get_return_at(ctx, res, 1)) == 100);
+
+        double val2 = ks_script_obj_as_number(ctx, ks_script_call_get_return_at(ctx, res, 2));
+        CHECK(val2 == doctest::Approx(90.5));
+
+        Ks_Handle h = ks_assets_manager_get_asset(am, "test_item");
+        MyTestAsset* old_ptr = (MyTestAsset*)ks_assets_manager_get_data(am, h);
+
+        old_ptr->id = 500;
+
+        const char* script_update = R"(
+            local asset = assets.get("test_item")
+            return asset.id
+        )";
+
+        auto res2 = ks_script_do_cstring(ctx, script_update);
+        CHECK(ks_script_obj_as_integer(ctx, ks_script_call_get_return(ctx, res2)) == 500);
+    }
 
     SUBCASE("Event Manager: C++ Register -> Lua Subscribe -> C++ Publish") {
         Ks_Handle evt = ks_event_manager_register(em, "C_Event", KS_TYPE_INT, KS_TYPE_CSTRING);
