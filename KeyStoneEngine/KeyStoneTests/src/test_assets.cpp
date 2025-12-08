@@ -40,7 +40,6 @@ TEST_CASE("C API: Assets Manager") {
 
     SUBCASE("Full Lifecycle") {
         Ks_AssetsManager am = ks_assets_manager_create();
-
         Ks_IAsset interface;
         interface.load_from_file_fn = my_asset_load_file;
         interface.load_from_data_fn = my_asset_load_data;
@@ -68,13 +67,11 @@ TEST_CASE("C API: Assets Manager") {
 
         ks_assets_manager_asset_release(am, handle);
         CHECK(ks_assets_is_handle_valid(am, handle) == ks_false);
-
         ks_assets_manager_destroy(am);
     }
 
     SUBCASE("Hot Reloading System") {
         Ks_AssetsManager am = ks_assets_manager_create();
-
         Ks_IAsset interface;
         interface.load_from_file_fn = text_load_file;
         interface.load_from_data_fn = nullptr;
@@ -110,8 +107,42 @@ TEST_CASE("C API: Assets Manager") {
         CHECK(reloaded == true);
         CHECK(std::string(data->content) == "Version 2 - RELOADED");
 
-        ks_assets_manager_destroy(am);
         std::remove(test_path);
+        ks_assets_manager_destroy(am);
+    }
+
+    SUBCASE("Reference Counting Logic") {
+        Ks_AssetsManager am = ks_assets_manager_create();
+
+        Ks_IAsset interface;
+        interface.load_from_file_fn = my_asset_load_file;
+        interface.load_from_data_fn = my_asset_load_data;
+        interface.destroy_fn = my_asset_destroy;
+
+        ks_assets_manager_register_asset_type(am, "MyCAsset", interface);
+
+        Ks_Handle h1 = ks_assets_manager_load_asset_from_file(am, "MyCAsset", "hero", "hero.png");
+        CHECK(h1 != KS_INVALID_HANDLE);
+        CHECK(ks_assets_manager_get_ref_count(am, h1) == 1);
+
+        Ks_Handle h2 = ks_assets_manager_load_asset_from_file(am, "MyCAsset", "hero", "hero.png");
+        CHECK(h1 == h2);
+        CHECK(ks_assets_manager_get_ref_count(am, h1) == 2);
+
+        Ks_Handle h3 = ks_assets_manager_get_asset(am, "hero");
+        CHECK(h1 == h3);
+        CHECK(ks_assets_manager_get_ref_count(am, h1) == 3);
+
+        ks_assets_manager_asset_release(am, h3);
+        CHECK(ks_assets_manager_get_ref_count(am, h1) == 2);
+
+        ks_assets_manager_asset_release(am, h2);
+        CHECK(ks_assets_manager_get_ref_count(am, h1) == 1);
+
+        ks_assets_manager_asset_release(am, h1);
+
+        CHECK(ks_assets_is_handle_valid(am, h1) == ks_false);
+        ks_assets_manager_destroy(am);
     }
 
     ks_memory_shutdown();

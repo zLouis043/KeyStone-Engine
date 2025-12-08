@@ -1,110 +1,87 @@
 /**
  * @file assets_manager.h
- * @brief Central manager that handles loading and caching of resources.
- *
- * @defgroup Assets Asset Management
- * @brief Resource Managing System (loading, caching, release).
- * @{
+ * @brief Resource management system.
+ * Handles loading, caching, reference counting, and hot-reloading of assets.
+ * @ingroup Assets
  */
 #pragma once
 
 #include "asset.h"
 #include "../core/handle.h"
 
-/**
- * @brief Opaque pointer to the internal implementation of the Assets Manager.
- */
-typedef void *Ks_AssetsManager_Impl;
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /**
- * @brief Handle structure for the Assets Manager.
- */
-struct Ks_AssetsManager {
-  Ks_AssetsManager_Impl impl;
-};
+* @brief Opaque handle to the Assets Manager instance.
+*/
+typedef ks_ptr Ks_AssetsManager;
 
 /**
- * @brief Creates a new instance of the Assets Manager.
- * @return A new Assets Manager handle.
+ * @brief Creates a new Assets Manager.
+ * Initializes the internal file watcher for hot-reloading.
  */
 KS_API Ks_AssetsManager ks_assets_manager_create();
 
 /**
- * @brief Destroys an Assets Manager instance and all managed assets.
- * @param am The manager to destroy.
+ * @brief Destroys the manager and releases all loaded assets.
+ * Ensures all `destroy_fn` callbacks are invoked for active assets.
  */
 KS_API ks_no_ret ks_assets_manager_destroy(Ks_AssetsManager am);
 
 /**
- * @brief Registers a new asset type definition with the manager.
- *
- * @param am The Assets Manager.
- * @param type_name The unique string identifier for the asset type (e.g. "Texture").
- * @param asset_interface The interface containing load/destroy callbacks for this type.
+ * @brief Registers a new asset type.
+ * * @param am The manager instance.
+ * @param type_name Unique string identifier (e.g., "Texture", "Sound").
+ * @param asset_interface VTable containing load/destroy callbacks.
  */
-KS_API ks_no_ret ks_assets_manager_register_asset_type(Ks_AssetsManager am,
-                                                  ks_str type_name,
-                                                  Ks_IAsset asset_interface);
+KS_API ks_no_ret ks_assets_manager_register_asset_type(Ks_AssetsManager am, ks_str type_name, Ks_IAsset asset_interface);
 
 /**
- * @brief Loads an asset from a file.
+ * @brief Loads an asset from disk.
  *
- * If the asset is already loaded (checked by name), its reference count is incremented.
+ * If the asset is already loaded (matched by name), its reference count is incremented
+ * and the existing handle is returned.
  *
- * @param am The Assets Manager.
- * @param type_name The type of the asset (must be registered).
- * @param asset_name A unique name to identify this specific asset instance.
- * @param file_path Path to the file on disk.
- * @return Handle to the loaded asset, or KS_INVALID_HANDLE on failure.
+ * @param am The manager instance.
+ * @param type_name Registered type name.
+ * @param asset_name Unique name/ID for the asset.
+ * @param file_path Path to the source file.
+ * @return Handle to the asset, or KS_INVALID_HANDLE on failure.
  */
-KS_API Ks_Handle ks_assets_manager_load_asset_from_file(
-    Ks_AssetsManager am, ks_str type_name, ks_str asset_name,
-    ks_str file_path);
+KS_API Ks_Handle ks_assets_manager_load_asset_from_file(Ks_AssetsManager am, ks_str type_name, ks_str asset_name, ks_str file_path);
 
 /**
- * @brief Loads an asset from raw data in memory.
- *
- * @param am The Assets Manager.
- * @param type_name The type of the asset.
- * @param asset_name A unique name to identify this specific asset instance.
- * @param data Pointer to the raw data.
- * @return Handle to the loaded asset, or KS_INVALID_HANDLE on failure.
+ * @brief Loads an asset from memory buffer.
+ * Useful for procedural assets or embedded resources.
  */
-KS_API Ks_Handle ks_assets_manager_load_asset_from_data(
-    Ks_AssetsManager am, ks_str type_name, ks_str asset_name,
-    const Ks_UserData data);
+KS_API Ks_Handle ks_assets_manager_load_asset_from_data(Ks_AssetsManager am, ks_str type_name, ks_str asset_name, const Ks_UserData data);
 
 /**
- * @brief Reloads an existing asset from disk/memory.
- * Use this for hot-reloading.
- * @param am The Assets Manager.
- * @param handle The handle of the asset to reload.
- * @return ks_true if reloaded successfully, ks_false otherwise.
+ * @brief Polling function for hot-reloading.
+ * Checks file watcher status and reloads modified assets automatically.
+ * Should be called once per frame.
  */
-KS_API ks_bool ks_assets_manager_reload_asset(Ks_AssetsManager am, Ks_Handle handle);
-
 KS_API ks_no_ret ks_assets_manager_update(Ks_AssetsManager am);
 
 /**
- * @brief Retrieves a handle to an already loaded asset by name.
- * Increments the reference count.
- *
- * @param am The Assets Manager.
- * @param asset_name The name of the asset to find.
- * @return Handle to the asset, or KS_INVALID_HANDLE if not found.
+ * @brief Manually reloads an asset.
+ * Re-reads the file from disk and updates the internal data pointer while keeping the handle valid.
  */
-KS_API Ks_Handle ks_assets_manager_get_asset(Ks_AssetsManager am,
-    ks_str asset_name);
+KS_API ks_bool ks_assets_manager_reload_asset(Ks_AssetsManager am, Ks_Handle handle);
 
 /**
- * @brief Gets the raw data pointer associated with an asset handle.
- *
- * @param am The Assets Manager.
- * @param handle The asset handle.
- * @return Pointer to the asset data structure.
+ * @brief Retrieves an existing asset handle by name.
+ * @note Increments the reference count. Caller must eventually call ks_assets_manager_asset_release.
  */
-KS_API Ks_AssetData ks_assets_manager_get_data(Ks_AssetsManager am,
-    Ks_Handle handle);
+KS_API Ks_Handle ks_assets_manager_get_asset(Ks_AssetsManager am, ks_str asset_name);
+
+/**
+ * @brief Gets the raw data pointer for an asset.
+ * @return Pointer to the asset data structure, or NULL if handle is invalid.
+ */
+KS_API Ks_AssetData ks_assets_manager_get_data(Ks_AssetsManager am, Ks_Handle handle);
 
 /**
  * @brief Gets the registered type name of the asset (e.g. "Texture", "Sound").
@@ -125,24 +102,19 @@ KS_API uint32_t ks_assets_manager_get_ref_count(Ks_AssetsManager am,
     Ks_Handle handle);
 
 /**
- * @brief Releases a reference to an asset.
- *
- * If the reference count reaches zero, the asset is destroyed using its registered destroy callback.
- *
- * @param am The Assets Manager.
- * @param handle The asset handle to release.
+ * @brief Decrements the reference count of an asset.
+ * If the count reaches zero, the asset is unloaded and its memory freed.
  */
-KS_API ks_no_ret ks_assets_manager_asset_release(Ks_AssetsManager am,
-    Ks_Handle handle);
+KS_API ks_no_ret ks_assets_manager_asset_release(Ks_AssetsManager am, Ks_Handle handle);
 
 /**
- * @brief Checks if an asset handle is currently valid within the manager.
- *
- * @param am The Assets Manager.
- * @param handle The asset handle.
- * @return ks_true if valid, ks_false otherwise.
+ * @brief Checks if a handle refers to a valid, loaded asset.
  */
-KS_API ks_bool ks_assets_is_handle_valid(Ks_AssetsManager am,
-    Ks_Handle handle);
+KS_API ks_bool ks_assets_is_handle_valid(Ks_AssetsManager am, Ks_Handle handle);
+
+#ifdef __cplusplus
+}
+#endif
+
 
 /** @} */

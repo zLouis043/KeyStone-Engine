@@ -94,5 +94,67 @@ TEST_CASE("C API: Serializer System") {
         ks_serializer_destroy(ser2);
     }
 
+    SUBCASE("Object Composition & Move Semantics") {
+        Ks_Serializer ser = ks_serializer_create();
+        Ks_Json root = ks_serializer_get_root(ser);
+
+        Ks_Json meta = ks_json_create_object(ser);
+        Ks_Json ver = ks_json_create_number(ser, 1.5);
+
+        ks_json_object_add(ser, meta, "version", ver);
+
+        ks_json_object_add(ser, root, "metadata", meta);
+
+        CHECK(ks_json_object_has(root, "metadata"));
+
+        Ks_Json fetched_meta = ks_json_object_get(root, "metadata");
+        CHECK(ks_json_get_type(fetched_meta) == KS_JSON_OBJECT);
+
+        Ks_Json fetched_ver = ks_json_object_get(fetched_meta, "version");
+        CHECK(ks_json_get_number(fetched_ver) == doctest::Approx(1.5));
+
+        ks_serializer_destroy(ser);
+    }
+
+    SUBCASE("Arrays & Iteration") {
+        Ks_Serializer ser = ks_serializer_create();
+        Ks_Json arr = ks_json_create_array(ser);
+
+        for (int i = 0; i < 5; ++i) {
+            ks_json_array_push(ser, arr, ks_json_create_number(ser, i * 10));
+        }
+
+        CHECK(ks_json_array_size(arr) == 5);
+        CHECK(ks_json_get_number(ks_json_array_get(arr, 4)) == 40.0);
+        CHECK(ks_json_array_get(arr, 100) == nullptr);
+
+        ks_serializer_destroy(ser);
+    }
+
+    SUBCASE("IO: Dump & Load") {
+        Ks_Serializer ser = ks_serializer_create();
+        Ks_Json root = ks_serializer_get_root(ser);
+        ks_json_object_add(ser, root, "test", ks_json_create_bool(ser, ks_true));
+
+        const char* json_str = ks_serializer_dump_to_string(ser);
+        CHECK(std::string(json_str).find("\"test\"") != std::string::npos);
+
+        Ks_Serializer ser2 = ks_serializer_create();
+        CHECK(ks_serializer_load_from_string(ser2, json_str) == ks_true);
+
+        Ks_Json root2 = ks_serializer_get_root(ser2);
+        CHECK(ks_json_get_bool(ks_json_object_get(root2, "test")) == ks_true);
+
+        ks_serializer_destroy(ser);
+        ks_serializer_destroy(ser2);
+    }
+
+    SUBCASE("Error Handling: Bad JSON") {
+        Ks_Serializer ser = ks_serializer_create();
+        bool ok = ks_serializer_load_from_string(ser, "{\"key\": 1");
+        CHECK(ok == ks_false);
+        ks_serializer_destroy(ser);
+    }
+
     ks_memory_shutdown();
 }

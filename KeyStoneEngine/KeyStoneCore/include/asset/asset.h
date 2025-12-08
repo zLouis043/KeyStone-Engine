@@ -11,6 +11,11 @@
 
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
 /**
  * @brief Generic pointer to asset data.
  */
@@ -46,3 +51,7 @@ struct Ks_IAsset {
   asset_load_from_data_fn load_from_data_fn; ///< Callback to load asset from memory.
   asset_destroy_fn destroy_fn;               ///< Callback to destroy the asset.
 };
+
+#ifdef __cplusplus
+}
+#endif

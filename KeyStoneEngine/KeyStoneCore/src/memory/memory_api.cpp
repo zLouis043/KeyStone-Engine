@@ -23,7 +23,7 @@ Ks_Memory_Stats ks_memory_get_stats()
     result.resource_pools_capacity = stats.resource_pools_capacity;
     result.resource_pools_used = stats.resource_pools_used;
     
-    memcpy((void*)&result.tag_stats, (void*)&stats.tag_stats, sizeof(Ks_Tag_Stats));
+    memcpy((void*)&result.tag_stats, (void*)&stats.tag_stats, KS_TAG_COUNT * sizeof(stats.tag_stats[0]));
     result.total_allocated = stats.total_allocated;
     return result;
 }

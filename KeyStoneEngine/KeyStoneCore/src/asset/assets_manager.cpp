@@ -266,7 +266,7 @@ Ks_Handle AssetManager_Impl::get_asset(const std::string& asset_name)
 KS_API Ks_AssetsManager ks_assets_manager_create()
 {
 	Ks_AssetsManager am;
-	am.impl = reinterpret_cast<AssetManager_Impl*>(
+	am = reinterpret_cast<AssetManager_Impl*>(
 		ks_alloc(
 			sizeof(AssetManager_Impl),
 			KS_LT_USER_MANAGED,
@@ -274,27 +274,28 @@ KS_API Ks_AssetsManager ks_assets_manager_create()
 		)
 	);
 
-	new (am.impl) AssetManager_Impl();
+	new (am) AssetManager_Impl();
 
 	return am;
 }
 
 KS_API ks_no_ret ks_assets_manager_destroy(Ks_AssetsManager am)
 {
-	if (am.impl) {
-		ks_dealloc(am.impl);
+	if (am) {
+		static_cast<AssetManager_Impl*>(am)->~AssetManager_Impl();
+		ks_dealloc(am);
 	}
 }
 
 KS_API ks_no_ret ks_assets_manager_register_asset_type(Ks_AssetsManager am, ks_str type_name, Ks_IAsset asset_interface)
 {
-	AssetManager_Impl* iam = static_cast<AssetManager_Impl*>(am.impl);
+	AssetManager_Impl* iam = static_cast<AssetManager_Impl*>(am);
 	iam->register_interface(type_name, asset_interface);
 }
 
 KS_API Ks_Handle ks_assets_manager_load_asset_from_file(Ks_AssetsManager am, ks_str type_name, ks_str asset_name, ks_str file_path)
 {
-	AssetManager_Impl* iam = static_cast<AssetManager_Impl*>(am.impl);
+	AssetManager_Impl* iam = static_cast<AssetManager_Impl*>(am);
 	
 	auto asset_handle = iam->get_asset(asset_name);
 
@@ -333,7 +334,7 @@ KS_API Ks_Handle ks_assets_manager_load_asset_from_file(Ks_AssetsManager am, ks_
 
 KS_API Ks_Handle ks_assets_manager_load_asset_from_data(Ks_AssetsManager am, ks_str type_name, ks_str asset_name, const Ks_UserData data)
 {
-	AssetManager_Impl* iam = static_cast<AssetManager_Impl*>(am.impl);
+	AssetManager_Impl* iam = static_cast<AssetManager_Impl*>(am);
 
 	auto asset_handle = iam->get_asset(asset_name);
 
@@ -369,18 +370,18 @@ KS_API Ks_Handle ks_assets_manager_load_asset_from_data(Ks_AssetsManager am, ks_
 }
 
 KS_API ks_no_ret ks_assets_manager_update(Ks_AssetsManager am) {
-	static_cast<AssetManager_Impl*>(am.impl)->update();
+	static_cast<AssetManager_Impl*>(am)->update();
 }
 
 KS_API ks_bool ks_assets_manager_reload_asset(Ks_AssetsManager am, Ks_Handle handle) {
 	if (handle == KS_INVALID_HANDLE) return false;
-	AssetManager_Impl* iam = static_cast<AssetManager_Impl*>(am.impl);
+	AssetManager_Impl* iam = static_cast<AssetManager_Impl*>(am);
 	return iam->reload_asset(handle);
 }
 
 KS_API Ks_Handle ks_assets_manager_get_asset(Ks_AssetsManager am, ks_str asset_name)
 {
-	AssetManager_Impl* iam = static_cast<AssetManager_Impl*>(am.impl);
+	AssetManager_Impl* iam = static_cast<AssetManager_Impl*>(am);
 
 	auto asset_handle = iam->get_asset(asset_name);
 
@@ -395,7 +396,7 @@ KS_API Ks_Handle ks_assets_manager_get_asset(Ks_AssetsManager am, ks_str asset_n
 
 KS_API Ks_AssetData ks_assets_manager_get_data(Ks_AssetsManager am, Ks_Handle handle)
 {
-	AssetManager_Impl* iam = static_cast<AssetManager_Impl*>(am.impl);
+	AssetManager_Impl* iam = static_cast<AssetManager_Impl*>(am);
 
 	if (handle == KS_INVALID_HANDLE) {
 		return nullptr;
@@ -406,20 +407,20 @@ KS_API Ks_AssetData ks_assets_manager_get_data(Ks_AssetsManager am, Ks_Handle ha
 
 KS_API ks_str ks_assets_manager_get_type_name(Ks_AssetsManager am, Ks_Handle handle)
 {
-	AssetManager_Impl* iam = static_cast<AssetManager_Impl*>(am.impl);
+	AssetManager_Impl* iam = static_cast<AssetManager_Impl*>(am);
 	if (handle == KS_INVALID_HANDLE) return nullptr;
 	return iam->get_asset_type_from_handle_raw(handle);
 }
 
 KS_API ks_uint32 ks_assets_manager_get_ref_count(Ks_AssetsManager am, Ks_Handle handle)
 {
-	AssetManager_Impl* iam = static_cast<AssetManager_Impl*>(am.impl);
+	AssetManager_Impl* iam = static_cast<AssetManager_Impl*>(am);
 	return iam->get_asset_ref_count_from_handle(handle);
 }
 
 ks_no_ret ks_assets_manager_asset_release(Ks_AssetsManager am, Ks_Handle handle)
 {
-	AssetManager_Impl* iam = static_cast<AssetManager_Impl*>(am.impl);
+	AssetManager_Impl* iam = static_cast<AssetManager_Impl*>(am);
 
 	iam->release_asset(handle);
 }
@@ -428,7 +429,7 @@ ks_bool ks_assets_is_handle_valid(Ks_AssetsManager am, Ks_Handle handle)
 {
 	if (handle == KS_INVALID_HANDLE) return false;
 
-	AssetManager_Impl* iam = static_cast<AssetManager_Impl*>(am.impl);
+	AssetManager_Impl* iam = static_cast<AssetManager_Impl*>(am);
 
 	return iam->is_handle_valid(handle);
 }

@@ -1,12 +1,7 @@
 /**
  * @file log.h
- * @brief Loggin system of the engine
- *
- * Provides macros and functions for logging to console or into files.
- *
- * @defgroup Core Core System
- * @brief Core functionalities and base types of the engine.
- * @{
+ * @brief Thread-safe logging subsystem with support for console and file sinks.
+ * @ingroup Core
  */
 #pragma once
 
@@ -17,61 +12,69 @@ extern "C" {
 #endif
 
 /**
- * @brief Defines the severity levels for logging messages.
- */
-enum Ks_Log_Level {
-  KS_LOG_LVL_TRACE,    ///< Detailed trace information, typically for debugging flow.
-  KS_LOG_LVL_DEBUG,    ///< Debugging information, less verbose than trace.
-  KS_LOG_LVL_INFO,     ///< General informational messages about application state.
-  KS_LOG_LVL_WARN,     ///< Warnings indicating potential issues that don't stop execution.
-  KS_LOG_LVL_ERROR,    ///< Errors indicating a failure in a specific operation.
-  KS_LOG_LVL_CRITICAL  ///< Critical errors causing application crash or severe failure.
-};
+* @brief Defines the severity levels for log messages.
+*/
+typedef enum {
+	KS_LOG_LVL_TRACE,    ///< Verbose debug information (lowest priority).
+	KS_LOG_LVL_DEBUG,    ///< Information useful for debugging software defects.
+	KS_LOG_LVL_INFO,     ///< General operational messages (startup, shutdown, etc.).
+	KS_LOG_LVL_WARN,     ///< Warnings about potential issues that do not stop execution.
+	KS_LOG_LVL_ERROR,    ///< Runtime errors that are recoverable.
+	KS_LOG_LVL_CRITICAL  ///< Severe errors causing premature termination or instability.
+} Ks_Log_Level;
 
 /**
- * @brief Logs a formatted message with a specific severity level.
+ * @brief Logs a formatted message to all active sinks.
+ * @note This function is thread-safe.
  *
- * @param level The severity level of the log message.
- * @param fmt The format string (printf-style).
- * @param ... Additional arguments corresponding to the format string.
+ * @param level Severity level. Messages below the current global level will be ignored.
+ * @param fmt The printf-style format string.
+ * @param ... Arguments for the format string.
  */
-KS_API void ks_logf(Ks_Log_Level level, const char *fmt, ...);
+KS_API void ks_logf(Ks_Log_Level level, const char* fmt, ...);
 
 /**
- * @brief Logs a simple string message with a specific severity level.
+ * @brief Logs a raw string message.
+ * @note Faster than ks_logf as it avoids formatting overhead.
  *
- * @param level The severity level of the log message.
- * @param str The message string to log.
+ * @param level Severity level.
+ * @param str The null-terminated message string.
  */
-KS_API void ks_log(Ks_Log_Level level, const char *str);
+KS_API void ks_log(Ks_Log_Level level, const char* str);
 
 /**
- * @brief Enables logging output to a file.
+ * @brief Adds a file sink to the logger.
+ * logs will be written to both console and this file.
  *
- * @param filename The path to the log file. If it exists, it will be appended/overwritten based on implementation.
+ * @param filename Path to the log file. If it exists, new logs are appended.
  */
-KS_API void ks_log_enable_file_sink(const char *filename);
+KS_API void ks_log_enable_file_sink(const char* filename);
 
 /**
- * @brief Sets the formatting pattern for log messages.
+ * @brief Customizes the log output format.
+ * Pattern syntax follows spdlog conventions:
+ * - %v: The actual text to log
+ * - %t: Thread ID
+ * - %P: Process ID
+ * - %n: Logger name
+ * - %l: Log level
+ * - %H: Hour (00-23)
+ * - %M: Minute (00-59)
+ * - %S: Second (00-59)
  *
- * This typically follows the spdlog pattern syntax (e.g., "[%H:%M:%S] [%l] %v").
- *
- * @param pattern The format pattern string.
+ * @param pattern The format pattern string (e.g., "[%H:%M:%S] [%l] %v").
  */
-KS_API void ks_log_set_pattern(const char *pattern);
+KS_API void ks_log_set_pattern(const char* pattern);
 
 /**
- * @brief Sets the minimum logging level. Messages below this level will be ignored.
- *
- * @param level The minimum severity level to output.
+ * @brief Sets the global filtering level.
+ * @param level The minimum severity level required for a message to be logged.
  */
 KS_API void ks_log_set_level(Ks_Log_Level level);
 
 /**
- * @brief Retrieves the current minimum logging level.
- *
- * @return The current active logging level.
+ * @brief Gets the current global logging level.
+ * @return The active logging level.
  */
 KS_API Ks_Log_Level ks_log_get_level();
 

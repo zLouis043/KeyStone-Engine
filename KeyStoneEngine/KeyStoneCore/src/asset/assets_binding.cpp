@@ -9,10 +9,8 @@ struct AssetProxy {
 
 static Ks_AssetsManager get_am_from_upvalue(Ks_Script_Ctx ctx) {
     Ks_Script_Object upval = ks_script_func_get_upvalue(ctx, 1);
-    void* impl_ptr = ks_script_lightuserdata_get_ptr(ctx, upval);
-    Ks_AssetsManager am;
-    am.impl = impl_ptr;
-    return am;
+    ks_ptr impl_ptr = ks_script_lightuserdata_get_ptr(ctx, upval);
+    return (Ks_AssetsManager)impl_ptr;
 }
 
 ks_returns_count l_asset_proxy_index(Ks_Script_Ctx ctx) {
@@ -181,7 +179,7 @@ ks_returns_count l_assets_get_data(Ks_Script_Ctx ctx) {
 }
 
 KS_API ks_no_ret ks_assets_manager_lua_bind(Ks_Script_Ctx ctx, Ks_AssetsManager am) {
-    Ks_Script_Object am_upval = ks_script_create_lightuserdata(ctx, am.impl);
+    Ks_Script_Object am_upval = ks_script_create_lightuserdata(ctx, am);
 
     auto b = ks_script_usertype_begin(ctx, "AssetHandle", sizeof(AssetProxy));
     ks_script_usertype_add_metamethod(b, KS_SCRIPT_MT_INDEX, l_asset_proxy_index);
