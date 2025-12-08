@@ -135,6 +135,7 @@ struct ScriptEnv_Impl {
         ks_file_watcher_poll(file_watcher);
         ks_assets_manager_update(assets_mgr);
         ks_time_manager_update(time_mgr);
+        ks_time_manager_process_timers(time_mgr);
 
         if (!pending_reloads.empty()) {
             for (const auto& path : pending_reloads) {
