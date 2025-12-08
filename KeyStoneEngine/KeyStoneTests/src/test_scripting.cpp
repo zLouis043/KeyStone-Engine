@@ -517,76 +517,65 @@ TEST_CASE("C API: Script Engine Suite") {
         } ks_script_end_scope(ctx);
     }
 
-    SUBCASE("Hot Reloading: Automatic Trigger via File Watcher") {
+    SUBCASE("ScriptEnv: Granular Dependency Reloading") {
         Ks_EventManager em = ks_event_manager_create();
         Ks_StateManager sm = ks_state_manager_create();
-        Ks_FileWatcher watcher = ks_file_watcher_create();
+        Ks_AssetsManager am = ks_assets_manager_create();
 
-        Ks_Script_Ctx hot_ctx = nullptr;
+        Ks_ScriptEnv env = ks_script_env_create(em, sm, am);
 
-        auto reload_lua_env = [&]() {
-            if (hot_ctx) ks_script_destroy_ctx(hot_ctx);
+        const char* main_path = "env_main.lua";
+        const char* lib_path = "env_lib.lua";
 
-            hot_ctx = ks_script_create_ctx();
-            ks_types_lua_bind(hot_ctx);
-            ks_event_manager_lua_bind(em, hot_ctx);
-            ks_state_manager_lua_bind(sm, hot_ctx);
+        write_script_file(lib_path, R"(
+            local s = state("lib_value", 0)
+            s:set(10)
+            return "LibVersion1"
+        )");
 
-            g_reload_request = false;
-        };
+        write_script_file(main_path, R"(
+            require("env_lib")
+            
+            local s_run = state("main_run_count", 0)
+            s_run:set(s_run:get() + 1)
+        )");
 
-        reload_lua_env();
+        ks_script_env_init(env, main_path);
 
-        const char* script_path = "auto_reload_test.lua";
-
-        const char* v1 = R"(
-            local s = state("auto_score", 0)
-            s:set(s:get() + 1)
-        )";
-        write_script_file(script_path, v1);
-
-        ks_file_watcher_watch_file(watcher, script_path, on_script_change, nullptr);
-
-        ks_script_do_file(hot_ctx, script_path);
-
-        Ks_Handle h_score = ks_state_manager_get_handle(sm, "auto_score");
-        CHECK(ks_state_get_int(sm, h_score) == 1);
+        CHECK(ks_state_get_int(sm, ks_state_manager_get_handle(sm, "main_run_count")) == 1);
+        CHECK(ks_state_get_int(sm, ks_state_manager_get_handle(sm, "lib_value")) == 10);
 
         std::this_thread::sleep_for(std::chrono::milliseconds(1100));
-        const char* v2 = R"(
-            local s = state("auto_score")
-            s:set(s:get() + 100)
-        )";
-        write_script_file(script_path, v2);
 
-        bool reloaded_happened = false;
-        for (int i = 0; i < 20; ++i) {
-            ks_file_watcher_poll(watcher);
+        write_script_file(lib_path, R"(
+            local s = state("lib_value")
+            s:set(999)
+            return "LibVersion2"
+        )");
 
-            if (g_reload_request) {
-                ks_event_manager_lua_shutdown(em);
-                reload_lua_env();
+        bool reloaded = false;
+        for (int i = 0; i < 30; ++i) {
+            ks_script_env_update(env);
 
-                ks_script_do_file(hot_ctx, script_path);
-
-                reloaded_happened = true;
+            if (ks_state_get_int(sm, ks_state_manager_get_handle(sm, "lib_value")) == 999) {
+                reloaded = true;
                 break;
             }
-
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
 
-        CHECK(reloaded_happened == true);
+        CHECK(reloaded == true);
 
-        CHECK(ks_state_get_int(sm, h_score) == 101);
+        CHECK(ks_state_get_int(sm, ks_state_manager_get_handle(sm, "main_run_count")) == 1);
 
-        ks_file_watcher_destroy(watcher);
-        ks_script_destroy_ctx(hot_ctx);
+        ks_script_env_destroy(env);
+        ks_assets_manager_destroy(am);
         ks_state_manager_destroy(sm);
         ks_event_manager_destroy(em);
-        std::remove(script_path);
-    }
 
+        std::remove(main_path);
+        std::remove(lib_path);
+    }
     ks_script_destroy_ctx(ctx);
     ks_memory_shutdown();
 }

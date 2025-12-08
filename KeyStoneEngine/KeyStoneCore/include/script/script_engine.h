@@ -357,6 +357,9 @@ KS_API ks_no_ret ks_script_register_module(Ks_Script_Ctx ctx, ks_str name,
 /** @brief Adds a path to package.path. */
 KS_API ks_no_ret ks_script_add_package_path(Ks_Script_Ctx ctx, ks_str path);
 
+KS_API ks_str ks_script_resolve_module_path(Ks_Script_Ctx ctx, ks_str module_name);
+KS_API ks_no_ret ks_script_invalidate_module(Ks_Script_Ctx ctx, ks_str module_name);
+KS_API ks_no_ret ks_script_add_searcher(Ks_Script_Ctx ctx, Ks_Script_Function searcher, ks_int index);
 /** @brief Forces garbage collection. */
 KS_API ks_no_ret ks_script_gc_collect(Ks_Script_Ctx ctx);
 /** @brief Stops the garbage collector. */

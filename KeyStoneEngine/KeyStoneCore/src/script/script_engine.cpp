@@ -1385,6 +1385,69 @@ KS_API ks_no_ret ks_script_add_package_path(Ks_Script_Ctx ctx, ks_str path)
 
 }
 
+ks_str ks_script_resolve_module_path(Ks_Script_Ctx ctx, ks_str module_name)
+{
+    if (!ctx || !module_name) return nullptr;
+    auto* sctx = static_cast<KsScriptEngineCtx*>(ctx);
+    lua_State* L = sctx->get_raw_state();
+
+    lua_getglobal(L, "package");
+    lua_getfield(L, -1, "searchpath");
+    lua_pushstring(L, module_name);
+    lua_getfield(L, -3, "path");
+
+    if (lua_pcall(L, 2, 1, 0) != LUA_OK) {
+        lua_pop(L, 2);
+        return nullptr;
+    }
+
+    const char* path = nullptr;
+    if (lua_isstring(L, -1)) {
+        size_t len;
+        const char* raw = lua_tolstring(L, -1, &len);
+        char* copy = (char*)ks_alloc_debug(len + 1, KS_LT_USER_MANAGED, KS_TAG_SCRIPT, "ResolvedPath");
+        memcpy(copy, raw, len + 1);
+        path = copy;
+    }
+
+    lua_pop(L, 2);
+    return path;
+}
+
+ks_no_ret ks_script_invalidate_module(Ks_Script_Ctx ctx, ks_str module_name)
+{
+    if (!ctx || !module_name) return;
+    auto* sctx = static_cast<KsScriptEngineCtx*>(ctx);
+    lua_State* L = sctx->get_raw_state();
+
+    lua_getglobal(L, "package");
+    lua_getfield(L, -1, "loaded");
+    lua_pushnil(L);
+    lua_setfield(L, -2, module_name);
+    lua_pop(L, 2);
+}
+
+ks_no_ret ks_script_add_searcher(Ks_Script_Ctx ctx, Ks_Script_Function searcher, ks_int index)
+{
+    if (!ctx || searcher.type != KS_TYPE_SCRIPT_FUNCTION) return;
+    auto* sctx = static_cast<KsScriptEngineCtx*>(ctx);
+    lua_State* L = sctx->get_raw_state();
+
+    lua_getglobal(L, "package");
+    lua_getfield(L, -1, "searchers");
+
+    int len = (int)lua_rawlen(L, -1);
+    for (int i = len; i >= index; i--) {
+        lua_rawgeti(L, -1, i);
+        lua_rawseti(L, -2, i + 1);
+    }
+
+    sctx->get_from_registry(searcher.val.function_ref);
+    lua_rawseti(L, -2, (int)index);
+
+    lua_pop(L, 2);
+}
+
 KS_API ks_no_ret ks_script_gc_collect(Ks_Script_Ctx ctx)
 {
     if (!ctx) return;
