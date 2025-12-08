@@ -21,3 +21,5 @@
 #include "./include/time/timer.h"
 #include "./include/time/time_binding.h"
 #include "./include/script/script_env.h"
+#include "./include/serialization/serializer.h"
+#include "./include/serialization/serializer_binding.h"

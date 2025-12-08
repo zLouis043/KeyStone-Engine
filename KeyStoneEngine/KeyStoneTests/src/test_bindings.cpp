@@ -76,6 +76,8 @@ TEST_CASE("Managers-Lua bindings Tests") {
     Ks_TimeManager tm = ks_time_manager_create();
     ks_time_manager_lua_bind(ctx, tm);
 
+    ks_serializer_lua_bind(ctx);
+
 	SUBCASE("Assets Manager: Test Lua Bindings") {
 		Ks_IAsset interface;
 		interface.load_from_file_fn = my_asset_load_file;
@@ -477,6 +479,68 @@ TEST_CASE("Managers-Lua bindings Tests") {
 
         std::remove(main_path);
         std::remove(lib_path);
+    }
+
+    SUBCASE("Serializer: Lua Bindings Full Flow") {
+        const char* script = R"(
+            local ser = Serializer()
+            local root = ser:root()
+            
+            local config = ser:object()
+            config:add("width", ser:number(1920))
+            config:add("height", ser:number(1080))
+            config:add("fullscreen", ser:bool(true))
+            
+            local layers = ser:array()
+            layers:push(ser:string("background"))
+            layers:push(ser:string("ui"))
+            
+            root:add("window", config)
+            root:add("layers", layers)
+            
+            local json_str = ser:dump_string()
+            
+            local ser2 = Serializer()
+            if ser2:load_string(json_str) == false then
+                return "Load Failed"
+            end
+            
+            local root2 = ser2:root()
+            local win = root2:get("window")
+            local w = win:get("width"):as_number()
+            
+            local lay = root2:get("layers")
+            local l1 = lay:at(0):as_string()
+            
+            return w, l1
+        )";
+
+        Ks_Script_Function_Call_Result res = ks_script_do_cstring(ctx, script);
+
+        if (!ks_script_call_succeded(ctx, res)) {
+            FAIL(ks_script_get_last_error_str(ctx));
+        }
+
+        CHECK(ks_script_obj_as_number(ctx, ks_script_call_get_return_at(ctx, res, 1)) == 1920.0);
+
+        ks_str layer_str = ks_script_obj_as_cstring(ctx, ks_script_call_get_return_at(ctx, res, 2));
+        CHECK(strcmp(layer_str, "background") == 0);
+    }
+
+    SUBCASE("Serializer: Memory Management & Temporary Objects") {
+        const char* script = R"(
+            local ser = Serializer()
+            
+            for i=1, 100 do
+                local tmp = ser:object()
+                tmp:add("x", ser:number(i))
+            end
+            
+            return "OK"
+        )";
+
+        Ks_Script_Function_Call_Result res = ks_script_do_cstring(ctx, script);
+        CHECK(ks_script_call_succeded(ctx, res));
     }
 
     ks_time_manager_destroy(tm);

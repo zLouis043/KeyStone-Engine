@@ -44,6 +44,7 @@ chmod +x bootstrap-vcpkg.sh
 ./vcpkg install lua
 ./vcpkg install sol2
 ./vcpkg install spdlog
+./vcpkg install rapidjson
 ./vcpkg install doctest
 popd > /dev/null
 
