@@ -44,7 +44,9 @@ TEST_CASE("C API: Time Manager Core") {
     SUBCASE("One-Shot Timer") {
         TimerTestContext ctx;
 
-        Ks_Handle h = ks_timer_create(tm, 100000000ULL, ks_false); // 100ms
+        ks_time_manager_update(tm);
+
+        Ks_Handle h = ks_timer_create(tm, 200000000ULL, ks_false); // 200ms
         ctx.handle_ref = h;
 
         ks_timer_set_callback(tm, h, c_timer_callback, &ctx);
@@ -58,7 +60,7 @@ TEST_CASE("C API: Time Manager Core") {
         ks_time_manager_process_timers(tm);
         CHECK(ctx.call_count == 0);
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(60));
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
         ks_time_manager_update(tm);
         ks_time_manager_process_timers(tm);
 
@@ -68,6 +70,8 @@ TEST_CASE("C API: Time Manager Core") {
 
     SUBCASE("Looping Timer") {
         TimerTestContext ctx;
+
+        ks_time_manager_update(tm);
 
         Ks_Handle h = ks_timer_create(tm, 50000000ULL, ks_true); // 50ms Loop
         ks_timer_set_callback(tm, h, c_timer_callback, &ctx);
@@ -87,6 +91,8 @@ TEST_CASE("C API: Time Manager Core") {
 
     SUBCASE("Manual Stop & Destroy") {
         TimerTestContext ctx;
+        ks_time_manager_update(tm);
+        
         Ks_Handle h = ks_timer_create(tm, 10000000ULL, ks_false); // 10ms
         ks_timer_set_callback(tm, h, c_timer_callback, &ctx);
         ks_timer_start(tm, h);
