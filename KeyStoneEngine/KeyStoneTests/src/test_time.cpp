@@ -43,14 +43,13 @@ TEST_CASE("C API: Time Manager Core") {
 
     SUBCASE("One-Shot Timer") {
         TimerTestContext ctx;
+        
+        ks_time_manager_update(tm); 
 
-        ks_time_manager_update(tm);
-
-        Ks_Handle h = ks_timer_create(tm, 200000000ULL, ks_false); // 200ms
+        Ks_TimerHandle h = ks_timer_create(tm, 200000000ULL, ks_false);  200ms
         ctx.handle_ref = h;
 
         ks_timer_set_callback(tm, h, c_timer_callback, &ctx);
-
         ks_timer_start(tm, h);
 
         CHECK(ks_timer_is_running(tm, h) == ks_true);
@@ -58,12 +57,15 @@ TEST_CASE("C API: Time Manager Core") {
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
         ks_time_manager_update(tm);
         ks_time_manager_process_timers(tm);
-        CHECK(ctx.call_count == 0);
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
-        ks_time_manager_update(tm);
-        ks_time_manager_process_timers(tm);
-
+        
+        CHECK(ctx.call_count == 0); 
+        for(int i=0; i<4; ++i) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            ks_time_manager_update(tm);
+            ks_time_manager_process_timers(tm);
+            if (ctx.call_count == 1) break;
+        }
+        
         CHECK(ctx.call_count == 1);
         CHECK(ks_timer_is_running(tm, h) == ks_false);
     }
