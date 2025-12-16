@@ -26,6 +26,7 @@ public:
         RESOURCE,
         SCRIPT,
         PLUGIN_DATA,
+        JOB_SYSTEM,
         GARBAGE,
         TAG_COUNT
     };

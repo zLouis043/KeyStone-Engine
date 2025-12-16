@@ -17,6 +17,7 @@ struct ScriptEnv_Impl {
     Ks_EventManager event_mgr;
     Ks_StateManager state_mgr;
     Ks_AssetsManager assets_mgr;
+    Ks_JobManager job_mgr;
     Ks_TimeManager time_mgr;
 
     Ks_Script_Ctx script_ctx = nullptr;
@@ -27,14 +28,15 @@ struct ScriptEnv_Impl {
     std::unordered_map<std::string, std::string> path_to_module;
     std::vector<std::string> pending_reloads;
 
-    ScriptEnv_Impl(Ks_EventManager em, Ks_StateManager sm, Ks_AssetsManager am, Ks_TimeManager tm)
-        : event_mgr(em), state_mgr(sm), assets_mgr(am), time_mgr(tm)
+    ScriptEnv_Impl(Ks_EventManager em, Ks_StateManager sm, Ks_AssetsManager am, Ks_JobManager jm, Ks_TimeManager tm)
+        : event_mgr(em), state_mgr(sm), assets_mgr(am), job_mgr(jm), time_mgr(tm)
     {
         file_watcher = ks_file_watcher_create();
     }
 
     ~ScriptEnv_Impl() {
         if (script_ctx) {
+            ks_job_manager_destroy(job_mgr);
             ks_event_manager_lua_shutdown(event_mgr);
             ks_time_manager_binding_shutdown(time_mgr);
             ks_script_destroy_ctx(script_ctx);
@@ -112,7 +114,7 @@ struct ScriptEnv_Impl {
         ks_types_lua_bind(script_ctx);
         ks_event_manager_lua_bind(event_mgr, script_ctx);
         ks_state_manager_lua_bind(state_mgr, script_ctx);
-        ks_assets_manager_lua_bind(script_ctx, assets_mgr);
+        ks_assets_manager_lua_bind(script_ctx, assets_mgr, job_mgr);
         ks_time_manager_lua_bind(script_ctx, time_mgr);
 
         install_dev_searcher();
@@ -146,11 +148,11 @@ struct ScriptEnv_Impl {
     }
 };
 
-KS_API Ks_ScriptEnv ks_script_env_create(Ks_EventManager em, Ks_StateManager sm, Ks_AssetsManager am, Ks_TimeManager tm) {
+KS_API Ks_ScriptEnv ks_script_env_create(Ks_EventManager em, Ks_StateManager sm, Ks_AssetsManager am, Ks_JobManager jm, Ks_TimeManager tm) {
 
     void* raw_data = ks_alloc_debug(sizeof(ScriptEnv_Impl), KS_LT_USER_MANAGED, KS_TAG_INTERNAL_DATA, "KsScriptEnvImpl");
 
-    return (Ks_ScriptEnv) new(raw_data) ScriptEnv_Impl(em, sm, am, tm);
+    return (Ks_ScriptEnv) new(raw_data) ScriptEnv_Impl(em, sm, am, jm, tm);
 }
 
 KS_API ks_no_ret ks_script_env_destroy(Ks_ScriptEnv env) {

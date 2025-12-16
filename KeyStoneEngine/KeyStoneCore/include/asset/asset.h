@@ -52,6 +52,13 @@ struct Ks_IAsset {
   asset_destroy_fn destroy_fn;               ///< Callback to destroy the asset.
 };
 
+typedef enum {
+    KS_ASSET_STATE_NONE = 0,
+    KS_ASSET_STATE_LOADING, ///< Loading in the background
+    KS_ASSET_STATE_READY,   ///< Loaded and usable
+    KS_ASSET_STATE_FAILED   ///< Error while loading
+} Ks_AssetState;
+
 #ifdef __cplusplus
 }
 #endif

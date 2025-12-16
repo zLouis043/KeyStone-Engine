@@ -37,8 +37,8 @@ struct LuaSubInfo {
     Ks_EventManager em;
 };
 
-static std::mutex s_subs_mutex;
-static std::unordered_map<ks_uint32, LuaSubInfo*> s_lua_subscriptions;
+//static std::mutex s_subs_mutex;
+//static std::unordered_map<ks_uint32, LuaSubInfo*> s_lua_subscriptions;
 
 static Ks_EventManager get_em(Ks_Script_Ctx ctx) {
     Ks_Script_Object up = ks_script_func_get_upvalue(ctx, 1);
@@ -152,8 +152,8 @@ ks_returns_count l_events_publish(Ks_Script_Ctx ctx) {
     return 0;
 }
 
-ks_bool lua_subscriber_thunk(Ks_Event_Payload data, ks_ptr user_data) {
-    LuaSubInfo* info = (LuaSubInfo*)user_data;
+ks_bool lua_subscriber_thunk(Ks_Event_Payload data, Ks_Payload user_data) {
+    LuaSubInfo* info = (LuaSubInfo*)user_data.data;
     Ks_Script_Ctx ctx = info->ctx;
 
     Ks_Script_Object func_obj;
@@ -196,26 +196,46 @@ ks_bool lua_subscriber_thunk(Ks_Event_Payload data, ks_ptr user_data) {
     return ks_true;
 }
 
+void lua_sub_info_free(ks_ptr ptr) {
+    LuaSubInfo* info = (LuaSubInfo*)ptr;
+    if (info) {
+        Ks_Script_Object func_ref;
+        func_ref.val.function_ref = info->func_ref;
+        func_ref.type = KS_TYPE_SCRIPT_FUNCTION;
+        func_ref.state = KS_SCRIPT_OBJECT_VALID;
+
+        ks_script_free_obj(info->ctx, func_ref);
+        ks_dealloc(info);
+    }
+}
+
 ks_returns_count l_events_subscribe(Ks_Script_Ctx ctx) {
     Ks_EventManager em = get_em(ctx);
     double h_val = ks_script_obj_as_number(ctx, ks_script_get_arg(ctx, 1));
     Ks_Script_Object func = ks_script_get_arg(ctx, 2);
 
     LuaSubInfo* info = (LuaSubInfo*)ks_alloc(sizeof(LuaSubInfo), KS_LT_USER_MANAGED, KS_TAG_SCRIPT);
+    //LuaSubInfo info;
     info->ctx = ctx;
     info->em = em;
 
     ks_script_promote(ctx, func);
     info->func_ref = func.val.function_ref;
 
-    Ks_Handle sub = ks_event_manager_subscribe(em, (Ks_Handle)h_val, lua_subscriber_thunk, info);
+    Ks_Payload pd;
+    pd.data = info;
+    pd.size = sizeof(LuaSubInfo);
+    pd.owns_data = true;
+    pd.free_fn = lua_sub_info_free;
+
+    Ks_Handle sub = ks_event_manager_subscribe(em, (Ks_Handle)h_val, lua_subscriber_thunk, pd);
 
     {
-        std::lock_guard<std::mutex> lock(s_subs_mutex);
-        s_lua_subscriptions[(ks_uint32)sub] = info;
+        //std::lock_guard<std::mutex> lock(s_subs_mutex);
+        //s_lua_subscriptions[(ks_uint32)sub] = info;
     }
 
-    ks_script_stack_push_obj(ctx, ks_script_create_number(ctx, (double)sub));
+    ks_script_stack_push_obj(ctx, ks_script_create_integer(ctx, sub));
     return 1;
 }
 
@@ -226,6 +246,7 @@ ks_returns_count l_events_unsubscribe(Ks_Script_Ctx ctx) {
 
     ks_event_manager_unsubscribe(em, sub);
 
+/*
     {
         std::lock_guard<std::mutex> lock(s_subs_mutex);
         auto it = s_lua_subscriptions.find((ks_uint32)sub);
@@ -243,6 +264,7 @@ ks_returns_count l_events_unsubscribe(Ks_Script_Ctx ctx) {
             s_lua_subscriptions.erase(it);
         }
     }
+ */
     return 0;
 }
 
@@ -264,6 +286,7 @@ KS_API ks_no_ret ks_event_manager_lua_bind(Ks_EventManager em, Ks_Script_Ctx ctx
 }
 
 KS_API ks_no_ret ks_event_manager_lua_shutdown(Ks_EventManager em) {
+    /*
     std::lock_guard<std::mutex> lock(s_subs_mutex);
 
     auto it = s_lua_subscriptions.begin();
@@ -279,4 +302,5 @@ KS_API ks_no_ret ks_event_manager_lua_shutdown(Ks_EventManager em) {
             ++it;
         }
     }
+    */
 }

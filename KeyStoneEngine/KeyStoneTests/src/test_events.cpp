@@ -16,7 +16,7 @@ void reset_test_globals() {
     g_last_string_val = "";
 }
 
-ks_bool on_primitive_event(Ks_Event_Payload payload, ks_ptr user_data) {
+ks_bool on_primitive_event(Ks_Event_Payload payload, Ks_Payload user_data) {
     g_callback_count++;
 
     g_last_int_val = ks_event_get_int(payload, 0);
@@ -34,7 +34,7 @@ struct TestData {
 
 static TestData g_received_data = {};
 
-ks_bool on_userdata_event(Ks_Event_Payload payload, ks_ptr user_data) {
+ks_bool on_userdata_event(Ks_Event_Payload payload, Ks_Payload user_data) {
     g_callback_count++;
 
     Ks_UserData ud = ks_event_get_userdata(payload, 0);
@@ -66,7 +66,7 @@ TEST_CASE("C API: Event Manager") {
         Ks_Handle evt = ks_event_manager_register(em, "PrimEvent", 
                 KS_TYPE_INT, KS_TYPE_FLOAT, KS_TYPE_CSTRING);
 
-        Ks_Handle sub = ks_event_manager_subscribe(em, evt, on_primitive_event, NULL);
+        Ks_Handle sub = ks_event_manager_subscribe(em, evt, on_primitive_event, KS_NO_PAYLOAD);
         CHECK(sub != KS_INVALID_HANDLE);
 
         ks_event_manager_publish(em, evt, 42, 3.14f, "Keystone");
@@ -80,7 +80,7 @@ TEST_CASE("C API: Event Manager") {
     SUBCASE("Userdata Passing") {
         Ks_Handle evt = ks_event_manager_register(em, "DataEvent", KS_TYPE_USERDATA);
 
-        ks_event_manager_subscribe(em, evt, on_userdata_event, NULL);
+        ks_event_manager_subscribe(em, evt, on_userdata_event, KS_NO_PAYLOAD);
 
         TestData data;
         data.x = 100;
@@ -97,7 +97,7 @@ TEST_CASE("C API: Event Manager") {
     SUBCASE("Unsubscribe Logic") {
         Ks_Handle evt = ks_event_manager_register(em, "UnsubTest", KS_TYPE_INT);
 
-        Ks_Handle sub = ks_event_manager_subscribe(em, evt, on_primitive_event, NULL);
+        Ks_Handle sub = ks_event_manager_subscribe(em, evt, on_primitive_event, KS_NO_PAYLOAD);
 
         ks_event_manager_publish(em, evt, 1, 0.0f, "");
         CHECK(g_callback_count == 1);
@@ -111,8 +111,8 @@ TEST_CASE("C API: Event Manager") {
     SUBCASE("Multiple Subscribers") {
         Ks_Handle evt = ks_event_manager_register(em, "MultiTest", KS_TYPE_INT);
 
-        Ks_Handle sub1 = ks_event_manager_subscribe(em, evt, on_primitive_event, NULL);
-        Ks_Handle sub2 = ks_event_manager_subscribe(em, evt, on_primitive_event, NULL);
+        Ks_Handle sub1 = ks_event_manager_subscribe(em, evt, on_primitive_event, KS_NO_PAYLOAD);
+        Ks_Handle sub2 = ks_event_manager_subscribe(em, evt, on_primitive_event, KS_NO_PAYLOAD);
 
         ks_event_manager_publish(em, evt, 10, 0.0f, "");
 

@@ -19,7 +19,7 @@ void reset_c_globals() {
     g_c_call_count = 0;
 }
 
-ks_bool c_subscriber_cb(Ks_Event_Payload data, void* user_data) {
+ks_bool c_subscriber_cb(Ks_Event_Payload data, Ks_Payload user_data) {
     g_c_call_count++;
 
     if (ks_event_get_args_count(data) >= 1)
@@ -49,6 +49,12 @@ static void write_script_file(const char* path, const char* content) {
     out.close();
 }
 
+Ks_AssetData slow_load_lua(ks_str p) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    return (Ks_AssetData)0xDEADBEEF;
+}
+void dummy_free(Ks_AssetData d) {}
+
 TEST_CASE("Managers-Lua bindings Tests") {
 	ks_memory_init();
 
@@ -60,9 +66,11 @@ TEST_CASE("Managers-Lua bindings Tests") {
 
     ks_types_lua_bind(ctx);
 
+    Ks_JobManager job = ks_job_manager_create();
+
     Ks_AssetsManager am = ks_assets_manager_create();
 
-    ks_assets_manager_lua_bind(ctx, am);
+    ks_assets_manager_lua_bind(ctx, am, job);
 
     Ks_EventManager em = ks_event_manager_create();
 
@@ -170,6 +178,42 @@ TEST_CASE("Managers-Lua bindings Tests") {
         CHECK(ks_script_obj_as_integer(ctx, ks_script_call_get_return(ctx, res2)) == 500);
     }
 
+    SUBCASE("Assets Manager: Lua Async Assets") {
+        Ks_IAsset iface = { 0 };
+        iface.load_from_file_fn = slow_load_lua;
+        iface.destroy_fn = dummy_free;
+        ks_assets_manager_register_asset_type(am, "Slow", iface);
+
+        const char* script = R"(
+            local h = assets.load_async("Slow", "bg_music", "music.mp3")
+       
+            local s1 = assets.state(h)
+        
+            return s1
+        )";
+
+        auto res = ks_script_do_cstring(ctx, script);
+        CHECK(ks_script_call_succeded(ctx, res));
+
+        const char* ret_str = ks_script_obj_as_cstring(ctx, ks_script_call_get_return_at(ctx, res, 1));
+        CHECK(strcmp(ret_str, "loading") == 0);
+
+        int max_wait = 20;
+        while (ks_assets_get_state(am, ks_assets_manager_get_asset(am, "bg_music")) == KS_ASSET_STATE_LOADING && max_wait-- > 0) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+
+        const char* script_check = R"(
+            local h = assets.get("bg_music")
+            return assets.state(h)
+        )";
+
+        auto res2 = ks_script_do_cstring(ctx, script_check);
+        const char* final_state = ks_script_obj_as_cstring(ctx, ks_script_call_get_return_at(ctx, res2, 1));
+
+        CHECK(strcmp(final_state, "ready") == 0);
+    }
+
     SUBCASE("Event Manager: C++ Register -> Lua Subscribe -> C++ Publish") {
         Ks_Handle evt = ks_event_manager_register(em, "C_Event", KS_TYPE_INT, KS_TYPE_CSTRING);
 
@@ -203,7 +247,7 @@ TEST_CASE("Managers-Lua bindings Tests") {
         Ks_Handle evt = (Ks_Handle)h_val;
         CHECK(evt != KS_INVALID_HANDLE);
 
-        ks_event_manager_subscribe(em, evt, c_subscriber_cb, nullptr);
+        ks_event_manager_subscribe(em, evt, c_subscriber_cb, KS_NO_PAYLOAD);
 
         const char* pub_script = R"(
             local h = events.get("Lua_Event")
@@ -243,7 +287,7 @@ TEST_CASE("Managers-Lua bindings Tests") {
         Ks_Handle evt = ks_event_manager_register(em, "Table_Event", KS_TYPE_SCRIPT_TABLE);
 
         static bool table_verified = false;
-        auto verify_table_cb = [](Ks_Event_Payload data, void*) -> ks_bool {
+        auto verify_table_cb = [](Ks_Event_Payload data, Ks_Payload) -> ks_bool {
             Ks_Script_Ctx ctx = ks_event_get_script_ctx(data);
             Ks_Script_Table t = ks_event_get_script_table(data, 0);
 
@@ -267,7 +311,7 @@ TEST_CASE("Managers-Lua bindings Tests") {
             return ks_true;
         };
 
-        ks_event_manager_subscribe(em, evt, verify_table_cb, nullptr);
+        ks_event_manager_subscribe(em, evt, verify_table_cb, Ks_Payload{nullptr});
 
         const char* script = R"(
             local h = events.get("Table_Event")
@@ -424,9 +468,10 @@ TEST_CASE("Managers-Lua bindings Tests") {
         Ks_EventManager em2 = ks_event_manager_create();
         Ks_StateManager sm2 = ks_state_manager_create();
         Ks_AssetsManager am2 = ks_assets_manager_create();
+        Ks_JobManager jm2 = ks_job_manager_create();
         Ks_TimeManager tm2 = ks_time_manager_create();
 
-        Ks_ScriptEnv env = ks_script_env_create(em2, sm2, am2, tm2);
+        Ks_ScriptEnv env = ks_script_env_create(em2, sm2, am2, jm2, tm2);
 
         const char* main_path = "env_main.lua";
         const char* lib_path = "env_lib.lua";
@@ -552,6 +597,8 @@ TEST_CASE("Managers-Lua bindings Tests") {
     ks_event_manager_lua_shutdown(em);
 
     ks_event_manager_destroy(em);
+
+    ks_job_manager_destroy(job);
 
 	ks_script_destroy_ctx(ctx);
 

@@ -8,6 +8,7 @@
 #include "../state/state_manager.h"
 #include "../event/events_manager.h"
 #include "../time/time_manager.h"
+#include "../job/job.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -19,6 +20,7 @@ KS_API Ks_ScriptEnv ks_script_env_create(
     Ks_EventManager em,
     Ks_StateManager sm,
     Ks_AssetsManager am,
+    Ks_JobManager js,
     Ks_TimeManager tm
 );
 

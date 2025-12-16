@@ -36,6 +36,7 @@ typedef enum {
     KS_TAG_RESOURCE,      ///< Large assets (Textures, Meshes, Audio).
     KS_TAG_SCRIPT,        ///< Scripting engine allocations (Lua state, closures).
     KS_TAG_PLUGIN_DATA,   ///< Memory allocated by external plugins.
+    KS_TAG_JOB_SYSTEM,    ///< Memory allocated from the job system.
     KS_TAG_GARBAGE,       ///< Temporary buffers or uncategorized data.
     KS_TAG_COUNT          ///< Total number of tags (helper).
 } Ks_Tag;

@@ -39,7 +39,7 @@ struct EventDefinition {
 struct Subscriber {
     Ks_Handle sub_handle;
     ks_event_callback callback;
-    ks_ptr user_data;
+    Ks_Payload payload;
 };
 
 class EventManager_Impl {
@@ -51,6 +51,14 @@ public:
 
     ~EventManager_Impl() {
         definitions.clear();
+        for (auto subs : subscribers) {
+            for (auto sub : subs.second) {
+                if (sub.payload.owns_data && sub.payload.data) {
+                    if (sub.payload.free_fn) sub.payload.free_fn(sub.payload.data);
+                    else ks_dealloc(sub.payload.data);
+                }
+            }
+        }
         subscribers.clear();
         name_to_handle.clear();
     }
@@ -83,7 +91,7 @@ public:
         return it->second;
     }
 
-    Ks_Handle subscribe(Ks_Handle evt, ks_event_callback cb, ks_ptr user_data) {
+    Ks_Handle subscribe(Ks_Handle evt, ks_event_callback cb, Ks_Payload user_data) {
         std::lock_guard<std::mutex> lock(mtx);
         if (definitions.find(evt) == definitions.end()) return KS_INVALID_HANDLE;
 
@@ -96,7 +104,16 @@ public:
         std::lock_guard<std::mutex> lock(mtx);
         for (auto& [evt, subs] : subscribers) {
             auto it = std::remove_if(subs.begin(), subs.end(),
-                [sub](const Subscriber& s) { return s.sub_handle == sub; });
+                [sub](const Subscriber& s) { 
+                    if (s.sub_handle == sub) {
+                        if (s.payload.owns_data && s.payload.data) {
+                            if (s.payload.free_fn) s.payload.free_fn(s.payload.data);
+                            else ks_dealloc(s.payload.data);
+                        }
+                        return true;
+                    }
+                    return false;
+                });
             if (it != subs.end()) {
                 subs.erase(it, subs.end());
                 return;
@@ -113,7 +130,7 @@ public:
             }
         }
         for (const auto& sub : subs_copy) {
-            sub.callback(&payload, sub.user_data);
+            sub.callback(&payload, sub.payload);
         }
     }
 
@@ -255,7 +272,7 @@ KS_API const Ks_Type* ks_event_manager_get_signature(Ks_EventManager em, Ks_Hand
     return nullptr;
 }
 
-KS_API Ks_Handle ks_event_manager_subscribe(Ks_EventManager em, Ks_Handle event, ks_event_callback callback, ks_ptr user_data) {
+KS_API Ks_Handle ks_event_manager_subscribe(Ks_EventManager em, Ks_Handle event, ks_event_callback callback, Ks_Payload user_data) {
     return static_cast<EventManager_Impl*>(em)->subscribe(event, callback, user_data);
 }
 

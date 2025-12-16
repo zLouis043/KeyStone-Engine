@@ -44,6 +44,7 @@ static MemoryManager::Tag ks_to_tag(Ks_Tag tag){
         case KS_TAG_RESOURCE:      return MemoryManager::Tag::RESOURCE;
         case KS_TAG_SCRIPT:        return MemoryManager::Tag::SCRIPT;
         case KS_TAG_PLUGIN_DATA:   return MemoryManager::Tag::PLUGIN_DATA;
+        case KS_TAG_JOB_SYSTEM:   return MemoryManager::Tag::JOB_SYSTEM;
         case KS_TAG_GARBAGE:       return MemoryManager::Tag::GARBAGE;
         case KS_TAG_COUNT:         return MemoryManager::Tag::TAG_COUNT;
         default:

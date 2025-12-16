@@ -59,7 +59,7 @@ KS_API const Ks_Type* ks_event_manager_get_signature(Ks_EventManager em, Ks_Hand
  * @param user_data Context pointer passed to the callback.
  * @return Subscription handle (used to unsubscribe).
  */
-KS_API Ks_Handle ks_event_manager_subscribe(Ks_EventManager em, Ks_Handle event, ks_event_callback callback, ks_ptr user_data);
+KS_API Ks_Handle ks_event_manager_subscribe(Ks_EventManager em, Ks_Handle event, ks_event_callback callback, Ks_Payload user_data);
 
 /**
  * @brief Unsubscribes from an event.

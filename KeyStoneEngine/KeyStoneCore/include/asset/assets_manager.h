@@ -8,6 +8,7 @@
 
 #include "asset.h"
 #include "../core/handle.h"
+#include "../job/job.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -57,6 +58,17 @@ KS_API Ks_Handle ks_assets_manager_load_asset_from_file(Ks_AssetsManager am, ks_
  * Useful for procedural assets or embedded resources.
  */
 KS_API Ks_Handle ks_assets_manager_load_asset_from_data(Ks_AssetsManager am, ks_str type_name, ks_str asset_name, const Ks_UserData data);
+
+/**
+ * @brief Starts asyncronous loading of an asset.
+ * @param am Asset Manager
+ * @param type_name Type of the asset
+ * @param asset_name Unique name/ID for the asset.
+ * @param file_path Path to the source file.
+ * @param js the Job System needed for the worker thread 
+ * @return Handle to the asset, or KS_INVALID_HANDLE on failure. Use ks_assets_get_state to check whenever it is ready or not.
+ */
+KS_API Ks_Handle ks_assets_manager_load_async(Ks_AssetsManager am, ks_str type_name, ks_str asset_name, ks_str file_path, Ks_JobManager js);
 
 /**
  * @brief Polling function for hot-reloading.
@@ -111,6 +123,11 @@ KS_API ks_no_ret ks_assets_manager_asset_release(Ks_AssetsManager am, Ks_Handle 
  * @brief Checks if a handle refers to a valid, loaded asset.
  */
 KS_API ks_bool ks_assets_is_handle_valid(Ks_AssetsManager am, Ks_Handle handle);
+
+/**
+ * @brief Gets the state of an asset loading asynchrously
+ */
+KS_API Ks_AssetState ks_assets_get_state(Ks_AssetsManager am, Ks_Handle handle);
 
 #ifdef __cplusplus
 }

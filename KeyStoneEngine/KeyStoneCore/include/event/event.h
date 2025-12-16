@@ -2,6 +2,7 @@
 
 #include "../core/types.h"
 #include "../core/handle.h"
+#include "../core/cb.h"
 #include "../script/script_engine.h"
 
 #ifdef __cplusplus
@@ -10,7 +11,7 @@ extern "C" {
 
 typedef ks_ptr Ks_Event_Payload;
 
-typedef ks_bool(*ks_event_callback)(Ks_Event_Payload data, ks_ptr user_data);
+typedef ks_bool(*ks_event_callback)(Ks_Event_Payload data, Ks_Payload user_data);
 
 KS_API ks_size ks_event_get_args_count(Ks_Event_Payload data);
 KS_API Ks_Type ks_event_get_arg_type(Ks_Event_Payload data, ks_size index);
