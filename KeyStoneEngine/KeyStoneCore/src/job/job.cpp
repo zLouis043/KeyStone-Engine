@@ -9,6 +9,7 @@
 #include <condition_variable>
 #include <atomic>
 #include <functional>
+#include <cstring>
 
 struct JobCounter_Impl {
     std::atomic<int> active_jobs;
