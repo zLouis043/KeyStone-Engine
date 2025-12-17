@@ -25,3 +25,4 @@
 #include "./include/serialization/serializer.h"
 #include "./include/serialization/serializer_binding.h"
 #include "./include/job/job.h"
+#include "./include/profiler/profiler.h"

@@ -1,6 +1,7 @@
 #include "../../include/job/job.h"
 #include "../../include/memory/memory.h"
 #include "../../include/core/log.h"
+#include "../../include/profiler/profiler.h"
 
 #include <thread>
 #include <vector>
@@ -170,7 +171,10 @@ struct JobManager_Impl {
                     continue;
                 }
             }
-            execute_job(job);
+            {
+                KS_PROFILE_SCOPE("Worker_Execute_Job");
+                execute_job(job);
+            }
         }
     }
 

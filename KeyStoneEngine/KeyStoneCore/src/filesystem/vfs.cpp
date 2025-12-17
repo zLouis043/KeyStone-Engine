@@ -1,6 +1,7 @@
 #include "../../include/filesystem/vfs.h"
 #include "../../include/memory/memory.h"
 #include "../../include/core/log.h"
+#include "../../include/profiler/profiler.h"
 
 #include <string>
 #include <unordered_map>
@@ -24,6 +25,7 @@ struct VFS_Impl {
     }
 
     std::string resolve_internal(const std::string& virtual_path) {
+        KS_PROFILE_FUNCTION();
         std::string alias, relative_path;
         if (!parse_uri(virtual_path, alias, relative_path)) {
             return "";
@@ -103,6 +105,7 @@ KS_API ks_bool ks_vfs_exists(Ks_VFS vfs, ks_str virtual_path) {
 }
 
 KS_API ks_str ks_vfs_read_file(Ks_VFS vfs, ks_str virtual_path, ks_size* out_size) {
+    KS_PROFILE_FUNCTION();
     if (out_size) *out_size = 0;
     if (!vfs || !virtual_path) return nullptr;
 

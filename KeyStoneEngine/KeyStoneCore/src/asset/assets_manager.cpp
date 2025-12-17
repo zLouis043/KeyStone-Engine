@@ -1,5 +1,6 @@
 #include "../../include/asset/assets_manager.h"
 #include "../../include/filesystem/file_watcher.h"
+#include "../../include/profiler/profiler.h"
 
 #include <string>
 #include <unordered_map>
@@ -256,6 +257,8 @@ void AssetManager_Impl::register_asset(Ks_Handle handle, Ks_AssetEntry& entry)
 
 Ks_Handle AssetManager_Impl::load_sync(const std::string& type_name, const std::string& asset_name, const std::string& file_path) {
 	
+	KS_PROFILE_FUNCTION();
+
 	std::string final_path;
 	{
 		std::lock_guard<std::mutex> lock(assets_mutex);
@@ -299,6 +302,8 @@ Ks_Handle AssetManager_Impl::load_sync(const std::string& type_name, const std::
 
 Ks_Handle AssetManager_Impl::load_async(const std::string& type_name, const std::string& asset_name, const std::string& file_path, Ks_JobManager js) {
 	
+	KS_PROFILE_FUNCTION();
+
 	std::string final_path;
 	{
 		std::lock_guard<std::mutex> lock(assets_mutex);
@@ -337,6 +342,7 @@ Ks_Handle AssetManager_Impl::load_async(const std::string& type_name, const std:
 	payload->iface = it_iface->second;
 
 	auto job_fn = [](Ks_Payload p) {
+		KS_PROFILE_SCOPE("Async_Asset_Load_Work");
 		AsyncLoadPayload* py = (AsyncLoadPayload*)p.data;
 		Ks_AssetData data = py->iface.load_from_file_fn(py->path.c_str());
 		py->mgr->complete_async_load(py->handle, data, (data != KS_INVALID_ASSET_DATA), py->iface);

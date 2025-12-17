@@ -34,9 +34,9 @@ project "KeyStoneTests"
       defines { "_CRT_SECURE_NO_WARNINGS" }
 
    filter "configurations:Debug"
-      defines { "DEBUG", "_DEBUG" }
+      defines { "DEBUG", "_DEBUG", "KS_ENABLE_PROFILING", "KS_DEBUG" }
       symbols "On"
 
    filter "configurations:Release"
-      defines { "NDEBUG" }
+      defines { "NDEBUG", "KS_RELEASE" }
       optimize "On"

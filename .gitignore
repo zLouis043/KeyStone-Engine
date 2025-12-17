@@ -7,9 +7,6 @@
 .vs
 .vscode
 
-PLAN.md
-TODO.md
-
 build/
 
 old/
@@ -17,5 +14,5 @@ old/
 docs/
 *.doxyfile.bak
 
-./KeyStoneEngine/KeyStoneCLI/engine.cpp
-./KeyStoneEngine/KeyStoneCLI/engine.h
+logs/
+profiling/
