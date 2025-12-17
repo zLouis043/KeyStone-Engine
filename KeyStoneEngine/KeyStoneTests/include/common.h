@@ -8,7 +8,7 @@
 typedef struct {
     int id;
     float value;
-    char name[32];
+    char name[128];
 } MyCAsset;
 
 inline Ks_AssetData my_asset_load_file(ks_str file_path) {
@@ -18,8 +18,8 @@ inline Ks_AssetData my_asset_load_file(ks_str file_path) {
     asset->id = 100;
     asset->value = 3.14f;
     if (file_path) {
-        strncpy(asset->name, file_path, 31);
-        asset->name[31] = '\0';
+        strncpy(asset->name, file_path, 127);
+        asset->name[127] = '\0';
     }
     else {
         strcpy(asset->name, "Unknown");
