@@ -7,14 +7,14 @@ int main(int argc, char** argv) {
 
     KS_PROFILE_BEGIN_SESSION("KeyStone Tests", "profiling/test_run.json");
 
+    context.applyCommandLine(argc, argv);
+
     int res;
     {
         KS_PROFILE_SCOPE("RunAllTests");
         res = context.run();
     }
-
-    context.applyCommandLine(argc, argv);
-
+    
     KS_PROFILE_END_SESSION();
 
     if (context.shouldExit())

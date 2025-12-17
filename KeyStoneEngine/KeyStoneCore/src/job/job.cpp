@@ -98,14 +98,31 @@ static void set_thread_affinity(std::thread& t, int core_id) {
     SetThreadAffinityMask(t.native_handle(), mask);
 }
 
-#elif defined(__linux__) || defined(__APPLE__)
+#elif defined(__linux__)
 #include <pthread.h>
+#include <sched.h>
 
 static void set_thread_affinity(std::thread& t, int core_id) {
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
     CPU_SET(core_id, &cpuset);
     pthread_setaffinity_np(t.native_handle(), sizeof(cpu_set_t), &cpuset);
+}
+
+#elif defined(__APPLE__)
+#include <mach/thread_act.h>
+#include <mach/thread_policy.h>
+#include <pthread.h>
+
+static void set_thread_affinity(std::thread& t, int core_id) {
+    thread_affinity_policy_data_t policy = { core_id };
+    thread_port_t mach_thread = pthread_mach_thread_np(t.native_handle());
+    thread_policy_set(mach_thread, THREAD_AFFINITY_POLICY, (thread_policy_t)&policy, THREAD_AFFINITY_POLICY_COUNT);
+}
+
+#else
+static void set_thread_affinity(std::thread& t, int core_id) {
+    (void)t; (void)core_id;
 }
 #endif
 
@@ -265,6 +282,7 @@ KS_API ks_no_ret ks_job_dispatch_impl(Ks_JobManager js, ks_callback func, Ks_Pay
 }
 
 KS_API ks_no_ret ks_job_wait(Ks_JobManager js, Ks_JobCounter counter) {
+    KS_PROFILE_FUNCTION();
     if (!js || !counter) return;
     JobManager_Impl* s = impl(js);
     JobCounter_Impl* c = ctr(counter);

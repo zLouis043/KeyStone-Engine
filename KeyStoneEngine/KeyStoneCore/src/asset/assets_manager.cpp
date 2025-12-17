@@ -127,6 +127,7 @@ std::string AssetManager_Impl::resolve_path(const std::string& input_path) {
 
 Ks_AssetData AssetManager_Impl::get_asset_data_from_handle(Ks_Handle handle)
 {
+	KS_PROFILE_SCOPE("Asset_GetData_Lock");
 	std::lock_guard<std::mutex> lock(assets_mutex);
 	auto found = assets_entries.find(handle);
 	if (found == assets_entries.end()) return nullptr;

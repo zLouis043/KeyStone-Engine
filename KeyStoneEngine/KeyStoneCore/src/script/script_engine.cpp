@@ -2,6 +2,7 @@
 #include "../../include/script/script_engine_internal.h"
 #include "../../include/memory/memory.h"
 #include "../../include/core/log.h"
+#include "../../include/profiler/profiler.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -66,6 +67,7 @@ static int enum_newindex_error(lua_State* L);
 static int ks_script_error_handler(lua_State* L);
 
 Ks_Script_Ctx ks_script_create_ctx() {
+    KS_PROFILE_FUNCTION();
 	KsScriptEngineCtx* ctx = static_cast<KsScriptEngineCtx*>(ks_alloc_debug(
 		sizeof(*ctx),
 		KS_LT_USER_MANAGED,
@@ -88,6 +90,7 @@ Ks_Script_Ctx ks_script_create_ctx() {
 
 KS_API ks_no_ret ks_script_destroy_ctx(Ks_Script_Ctx ctx)
 {
+    KS_PROFILE_FUNCTION();
     KsScriptEngineCtx* sctx = static_cast<KsScriptEngineCtx*>(ctx);
     sctx->~KsScriptEngineCtx();
     ks_dealloc(sctx);
@@ -377,6 +380,7 @@ Ks_Script_Object ks_script_create_usertype_ref(Ks_Script_Ctx ctx, ks_str type_na
 
 Ks_Script_Function_Call_Result ks_script_func_callv_impl(Ks_Script_Ctx ctx, Ks_Script_Function f, ...)
 {
+    KS_PROFILE_FUNCTION();
     if (!ctx || f.type != KS_TYPE_SCRIPT_FUNCTION) return ks_script_create_invalid_obj(ctx);
 
     auto* sctx = static_cast<KsScriptEngineCtx*>(ctx);
@@ -544,6 +548,7 @@ KS_API Ks_Script_Coroutine_Status ks_script_coroutine_status(Ks_Script_Ctx ctx, 
 
 KS_API Ks_Script_Function_Call_Result ks_script_coroutine_resume(Ks_Script_Ctx ctx, Ks_Script_Coroutine coroutine, ks_size n_args)
 {
+
     if (!ks_script_obj_is(ctx, coroutine, KS_TYPE_SCRIPT_COROUTINE)) return ks_script_create_invalid_obj(ctx);
 
     auto* sctx = static_cast<KsScriptEngineCtx*>(ctx);
@@ -1038,7 +1043,7 @@ KS_API ks_no_ret ks_script_stack_push_string(Ks_Script_Ctx ctx, ks_str val)
 
 KS_API ks_no_ret ks_script_stack_push_obj(Ks_Script_Ctx ctx, Ks_Script_Object val)
 {
-
+    KS_PROFILE_FUNCTION();
     if (!ctx) return;
 
     auto* sctx = static_cast<KsScriptEngineCtx*>(ctx);
@@ -1235,6 +1240,7 @@ KS_API Ks_Script_Function ks_script_load_file(Ks_Script_Ctx ctx, ks_str file_pat
 
 KS_API Ks_Script_Function_Call_Result ks_script_do_cstring(Ks_Script_Ctx ctx, ks_str string)
 {
+    KS_PROFILE_FUNCTION();
     if (!ctx) return ks_script_create_invalid_obj(ctx);
 
     auto* sctx = static_cast<KsScriptEngineCtx*>(ctx);
@@ -1287,6 +1293,7 @@ KS_API Ks_Script_Function_Call_Result ks_script_do_cstring(Ks_Script_Ctx ctx, ks
 
 KS_API Ks_Script_Function_Call_Result ks_script_do_file(Ks_Script_Ctx ctx, ks_str file_path)
 {
+    KS_PROFILE_FUNCTION();
     if (!ctx) return ks_script_create_invalid_obj(ctx);
 
     auto* sctx = static_cast<KsScriptEngineCtx*>(ctx);
@@ -1340,6 +1347,7 @@ KS_API Ks_Script_Function_Call_Result ks_script_do_file(Ks_Script_Ctx ctx, ks_st
 
 KS_API Ks_Script_Object ks_script_require(Ks_Script_Ctx ctx, ks_str module_name)
 {
+    KS_PROFILE_FUNCTION();
     if (!ctx || !module_name) return ks_script_create_invalid_obj(ctx);
 
     auto* sctx = static_cast<KsScriptEngineCtx*>(ctx);
@@ -1556,6 +1564,7 @@ KS_API Ks_Script_Object ks_script_stack_get_top(Ks_Script_Ctx ctx)
 
 KS_API Ks_Script_Object ks_script_stack_peek(Ks_Script_Ctx ctx, ks_stack_idx i)
 {
+    KS_PROFILE_FUNCTION();
     if (!ctx) return ks_script_create_invalid_obj(ctx);
 
     auto* sctx = static_cast<KsScriptEngineCtx*>(ctx);
@@ -2495,6 +2504,7 @@ Ks_Script_Object ks_script_get_upvalue(Ks_Script_Ctx ctx, ks_upvalue_idx n)
 
 KS_API ks_no_ret ks_script_func_call(Ks_Script_Ctx ctx, Ks_Script_Function f, ks_size n_args, ks_size n_rets)
 {
+    KS_PROFILE_FUNCTION();
     if (!ctx || !ks_script_obj_is_callable(ctx, f)) return;
 
     auto* sctx = static_cast<KsScriptEngineCtx*>(ctx);
@@ -2549,7 +2559,7 @@ static const char* ks_metamethod_to_str(Ks_Script_Metamethod mt) {
 }
 
 static int usertype_gc_thunk(lua_State* L) {
-
+    KS_PROFILE_SCOPE("Lua_GC_Destruct");
     auto* handle = static_cast<KsUsertypeInstanceHandle*>(lua_touserdata(L, 1));
 
     if (!handle || handle->is_borrowed) return 0;
@@ -2564,6 +2574,7 @@ static int usertype_gc_thunk(lua_State* L) {
 }
 
 static int usertype_index_thunk(lua_State* L) {
+    KS_PROFILE_SCOPE("Lua_Property_Get");
     lua_settop(L, 2);
 
     lua_pushvalue(L, 2);
@@ -2588,6 +2599,7 @@ static int usertype_index_thunk(lua_State* L) {
 }
 
 static int usertype_newindex_thunk(lua_State* L) {
+    KS_PROFILE_SCOPE("Lua_Property_Set");
     lua_pushvalue(L, 2);
     lua_gettable(L, lua_upvalueindex(1));
 
@@ -2646,6 +2658,7 @@ static int usertype_auto_constructor_thunk(lua_State* L) {
 }
 
 static int generic_cfunc_thunk(lua_State* L) {
+    KS_PROFILE_SCOPE("Lua_C_Static_Call");
     lua_pushlightuserdata(L, (void*)&KS_CTX_REGISTRY_KEY);
     lua_gettable(L, LUA_REGISTRYINDEX);
     auto* ctx = static_cast<KsScriptEngineCtx*>(lua_touserdata(L, -1));
@@ -2662,6 +2675,7 @@ static int generic_cfunc_thunk(lua_State* L) {
 }
 
 static int instance_method_thunk(lua_State* L) {
+    KS_PROFILE_SCOPE("Lua_C_Method_Call");
     lua_pushlightuserdata(L, (void*)&KS_CTX_REGISTRY_KEY);
     lua_gettable(L, LUA_REGISTRYINDEX);
     auto* ctx = static_cast<KsScriptEngineCtx*>(lua_touserdata(L, -1));
@@ -2872,6 +2886,7 @@ static void save_usertype_table(lua_State* L, int table_idx, const std::string& 
 }
 
 static int usertype_field_getter_thunk(lua_State* L) {
+    KS_PROFILE_SCOPE("Lua_Field_Access");
     auto* handle = static_cast<KsUsertypeInstanceHandle*>(lua_touserdata(L, 1));
     if (!handle || !handle->instance) return 0;
 
@@ -2907,6 +2922,7 @@ static int usertype_field_getter_thunk(lua_State* L) {
 }
 
 static int usertype_field_setter_thunk(lua_State* L) {
+    KS_PROFILE_SCOPE("Lua_Field_Access");
     auto* handle = static_cast<KsUsertypeInstanceHandle*>(lua_touserdata(L, 1));
     if (!handle || !handle->instance) return luaL_error(L, "Invalid instance");
 
