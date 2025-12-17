@@ -33,12 +33,6 @@ KS_API Ks_AssetsManager ks_assets_manager_create();
 KS_API ks_no_ret ks_assets_manager_destroy(Ks_AssetsManager am);
 
 /**
- * @brief Set VFS instance to use for path resolve
- * If set, path protocols (e.g., "core://") will be resolved automatically
- */
-KS_API ks_no_ret ks_assets_manager_set_vfs(Ks_AssetsManager am, Ks_VFS vfs);
-
-/**
  * @brief Registers a new asset type.
  * * @param am The manager instance.
  * @param type_name Unique string identifier (e.g., "Texture", "Sound").

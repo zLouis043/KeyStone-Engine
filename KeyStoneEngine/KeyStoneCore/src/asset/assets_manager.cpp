@@ -68,13 +68,11 @@ public:
 	void release_asset(Ks_Handle handle);
 
 	Ks_FileWatcher get_watcher();
-	void set_vfs(Ks_VFS vfs_inst);
 	std::string resolve_path(const std::string& input_path);
 
 private:
 	std::mutex assets_mutex;
 	Ks_FileWatcher file_watcher = nullptr;
-	Ks_VFS vfs = nullptr;
 	std::unordered_map<std::string, Ks_Handle> path_to_handle;
 	std::unordered_map<std::string, Ks_IAsset> assets_interfaces;
 	std::unordered_map<Ks_Handle, Ks_AssetEntry> assets_entries;
@@ -113,18 +111,13 @@ Ks_Handle AssetManager_Impl::generate_handle() {
 	return ks_handle_make(asset_type_id);
 }
 
-void AssetManager_Impl::set_vfs(Ks_VFS vfs_inst) {
-	std::lock_guard<std::mutex> lock(assets_mutex);
-	vfs = vfs_inst;
-}
-
 std::string AssetManager_Impl::resolve_path(const std::string& input_path) {
-	if (!vfs || input_path.find("://") == std::string::npos) {
+	if (input_path.find("://") == std::string::npos) {
 		return input_path;
 	}
 
 	char buffer[1024];
-	if (ks_vfs_resolve(vfs, input_path.c_str(), buffer, 1024)) {
+	if (ks_vfs_resolve(input_path.c_str(), buffer, 1024)) {
 		return std::string(buffer);
 	}
 
@@ -259,11 +252,7 @@ Ks_Handle AssetManager_Impl::load_sync(const std::string& type_name, const std::
 	
 	KS_PROFILE_FUNCTION();
 
-	std::string final_path;
-	{
-		std::lock_guard<std::mutex> lock(assets_mutex);
-		final_path = resolve_path(file_path);
-	}
+	std::string final_path = resolve_path(file_path);
 	
 	std::lock_guard<std::mutex> lock(assets_mutex);
 
@@ -304,11 +293,7 @@ Ks_Handle AssetManager_Impl::load_async(const std::string& type_name, const std:
 	
 	KS_PROFILE_FUNCTION();
 
-	std::string final_path;
-	{
-		std::lock_guard<std::mutex> lock(assets_mutex);
-		final_path = resolve_path(file_path);
-	}
+	std::string final_path = resolve_path(file_path);
 	
 	std::lock_guard<std::mutex> lock(assets_mutex);
 
@@ -510,10 +495,6 @@ KS_API ks_no_ret ks_assets_manager_destroy(Ks_AssetsManager am)
 		static_cast<AssetManager_Impl*>(am)->~AssetManager_Impl();
 		ks_dealloc(am);
 	}
-}
-
-KS_API ks_no_ret ks_assets_manager_set_vfs(Ks_AssetsManager am, Ks_VFS vfs) {
-	if (am) static_cast<AssetManager_Impl*>(am)->set_vfs(vfs);
 }
 
 KS_API ks_no_ret ks_assets_manager_register_asset_type(Ks_AssetsManager am, ks_str type_name, Ks_IAsset asset_interface)

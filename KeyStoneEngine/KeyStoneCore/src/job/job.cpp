@@ -90,6 +90,25 @@ private:
     }
 };
 
+#ifdef _WIN32
+#include <windows.h>
+
+static void set_thread_affinity(std::thread& t, int core_id) {
+    DWORD_PTR mask = 1ULL << core_id;
+    SetThreadAffinityMask(t.native_handle(), mask);
+}
+
+#elif defined(__linux__) || defined(__APPLE__)
+#include <pthread.h>
+
+static void set_thread_affinity(std::thread& t, int core_id) {
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(core_id, &cpuset);
+    pthread_setaffinity_np(t.native_handle(), sizeof(cpu_set_t), &cpuset);
+}
+#endif
+
 struct JobManager_Impl {
     std::vector<std::thread> workers;
     std::deque<Job> queue;
@@ -112,6 +131,7 @@ struct JobManager_Impl {
 
         for (uint32_t i = 0; i < num_threads; ++i) {
             workers.emplace_back([this] { this->worker_loop(); });
+            set_thread_affinity(workers.back(), i + 1);
         }
     }
 

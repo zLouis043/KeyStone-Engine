@@ -9,11 +9,52 @@
 #include <filesystem>
 #include <vector>
 #include <cstring>
+#include <mutex>
+#include <shared_mutex>
 
 namespace fs = std::filesystem;
 
+struct PathCache {
+    std::unordered_map<std::string, std::string> cache;
+    std::mutex mutex;
+    size_t max_entries = 1024;
+
+    std::optional<std::string> get(const std::string& vfs_path) {
+        std::lock_guard lock(mutex);
+        auto it = cache.find(vfs_path);
+        return it != cache.end() ? std::optional(it->second) : std::nullopt;
+    }
+
+    void put(const std::string& vfs_path, const std::string& resolved) {
+        std::lock_guard lock(mutex);
+        if (cache.size() >= max_entries) {
+            cache.clear();
+        }
+        cache[vfs_path] = resolved;
+    }
+
+    void invalidate(const std::string& prefix = "") {
+        std::lock_guard lock(mutex);
+        if (prefix.empty()) {
+            cache.clear();
+        }
+        else {
+            for (auto it = cache.begin(); it != cache.end();) {
+                if (it->first.starts_with(prefix)) {
+                    it = cache.erase(it);
+                }
+                else {
+                    ++it;
+                }
+            }
+        }
+    }
+};
+
 struct VFS_Impl {
     std::unordered_map<std::string, std::string> mount_points;
+    mutable std::shared_mutex mount_mutex;
+    PathCache path_cache;
 
     bool parse_uri(const std::string& uri, std::string& out_alias, std::string& out_path) {
         size_t pos = uri.find("://");
@@ -25,43 +66,66 @@ struct VFS_Impl {
     }
 
     std::string resolve_internal(const std::string& virtual_path) {
-        KS_PROFILE_FUNCTION();
+
+        if (auto cached = path_cache.get(virtual_path)) {
+            KS_PROFILE_SCOPE("VFS_Cache_Hit");
+            return *cached;
+        }
+
+        KS_PROFILE_SCOPE("VFS_Cache_Miss");
         std::string alias, relative_path;
         if (!parse_uri(virtual_path, alias, relative_path)) {
             return "";
         }
 
-        auto it = mount_points.find(alias);
-        if (it == mount_points.end()) return "";
+        std::string base_path;
+        {
+            std::shared_lock lock(mount_mutex);
+            auto it = mount_points.find(alias);
+            if (it == mount_points.end()) return "";
+            base_path = it->second;
+        }
+
 
         try {
-            fs::path p = fs::path(it->second) / relative_path;
+            fs::path p = fs::path(base_path) / relative_path;
+
+            path_cache.put(virtual_path, p.string());
+
             return p.string();
         }
         catch (...) {
             return "";
         }
     }
+
+    void invalidate_cache(const std::string& mount_point = "") {
+        path_cache.invalidate(mount_point);
+    }
 };
 
-static VFS_Impl* impl(Ks_VFS vfs) { return (VFS_Impl*)vfs; }
+static VFS_Impl* g_vfs = nullptr;
 
-KS_API Ks_VFS ks_vfs_create() {
-    return new(ks_alloc(sizeof(VFS_Impl), KS_LT_USER_MANAGED, KS_TAG_INTERNAL_DATA)) VFS_Impl();
+KS_API ks_bool ks_vfs_init() {
+    if (g_vfs) return ks_false;
+    g_vfs = new(ks_alloc(sizeof(VFS_Impl), KS_LT_PERMANENT, KS_TAG_INTERNAL_DATA)) VFS_Impl();
+    return ks_true;
 }
 
-KS_API ks_no_ret ks_vfs_destroy(Ks_VFS vfs) {
-    if (vfs) {
-        impl(vfs)->~VFS_Impl();
-        ks_dealloc(vfs);
+KS_API ks_no_ret ks_vfs_shutdown() {
+    if (g_vfs) {
+        g_vfs->~VFS_Impl();
+        ks_dealloc(g_vfs);
+        g_vfs = nullptr;
     }
 }
 
-KS_API ks_bool ks_vfs_mount(Ks_VFS vfs, ks_str alias, ks_str physical_path, ks_bool overwrite) {
-    if (!vfs || !alias || !physical_path) return false;
-    VFS_Impl* i = impl(vfs);
+KS_API ks_bool ks_vfs_mount(ks_str alias, ks_str physical_path, ks_bool overwrite) {
+    if (!alias || !physical_path) return false;
 
-    if (!overwrite && i->mount_points.count(alias)) {
+    std::unique_lock lock(g_vfs->mount_mutex);
+
+    if (!overwrite && g_vfs->mount_points.count(alias)) {
         KS_LOG_WARN("[VFS] Alias '%s' already mounted", alias);
         return false;
     }
@@ -71,8 +135,14 @@ KS_API ks_bool ks_vfs_mount(Ks_VFS vfs, ks_str alias, ks_str physical_path, ks_b
         if (!fs::exists(abs_path)) {
             KS_LOG_WARN("[VFS] Mounting non-existent path: %s", physical_path);
         }
-        i->mount_points[alias] = abs_path.string();
+        g_vfs->mount_points[alias] = abs_path.string();
         KS_LOG_INFO("[VFS] Mounted '%s' -> '%s'", alias, abs_path.string().c_str());
+
+        lock.unlock();
+
+        std::string prefix = std::string(alias) + "://";
+        g_vfs->invalidate_cache(prefix);
+
         return true;
     }
     catch (...) {
@@ -80,15 +150,27 @@ KS_API ks_bool ks_vfs_mount(Ks_VFS vfs, ks_str alias, ks_str physical_path, ks_b
     }
 }
 
-KS_API ks_bool ks_vfs_unmount(Ks_VFS vfs, ks_str alias) {
-    if (!vfs || !alias) return false;
-    return impl(vfs)->mount_points.erase(alias) > 0;
+KS_API ks_bool ks_vfs_unmount(ks_str alias) {
+    if (!alias) return false;
+
+    std::unique_lock lock(g_vfs->mount_mutex);
+
+    bool erased = g_vfs->mount_points.erase(alias) > 0;
+
+    if (erased) {
+        std::string prefix = std::string(alias) + "://";
+        g_vfs->invalidate_cache(prefix);
+    }
+
+    lock.unlock();
+
+    return erased;
 }
 
-KS_API ks_bool ks_vfs_resolve(Ks_VFS vfs, ks_str virtual_path, char* out_path, ks_size max_len) {
-    if (!vfs || !virtual_path || !out_path) return false;
+KS_API ks_bool ks_vfs_resolve(ks_str virtual_path, char* out_path, ks_size max_len) {
+    if (!virtual_path || !out_path) return false;
 
-    std::string res = impl(vfs)->resolve_internal(virtual_path);
+    std::string res = g_vfs->resolve_internal(virtual_path);
     if (res.empty()) return false;
 
     if (res.length() >= max_len) return false;
@@ -97,19 +179,19 @@ KS_API ks_bool ks_vfs_resolve(Ks_VFS vfs, ks_str virtual_path, char* out_path, k
     return true;
 }
 
-KS_API ks_bool ks_vfs_exists(Ks_VFS vfs, ks_str virtual_path) {
-    if (!vfs || !virtual_path) return false;
-    std::string path = impl(vfs)->resolve_internal(virtual_path);
+KS_API ks_bool ks_vfs_exists(ks_str virtual_path) {
+    if (!virtual_path) return false;
+    std::string path = g_vfs->resolve_internal(virtual_path);
     if (path.empty()) return false;
     return fs::exists(path) && fs::is_regular_file(path);
 }
 
-KS_API ks_str ks_vfs_read_file(Ks_VFS vfs, ks_str virtual_path, ks_size* out_size) {
+KS_API ks_str ks_vfs_read_file(ks_str virtual_path, ks_size* out_size) {
     KS_PROFILE_FUNCTION();
     if (out_size) *out_size = 0;
-    if (!vfs || !virtual_path) return nullptr;
+    if (!virtual_path) return nullptr;
 
-    std::string path = impl(vfs)->resolve_internal(virtual_path);
+    std::string path = g_vfs->resolve_internal(virtual_path);
     if (path.empty()) return nullptr;
 
     std::ifstream file(path, std::ios::binary | std::ios::ate);
@@ -136,10 +218,10 @@ KS_API ks_str ks_vfs_read_file(Ks_VFS vfs, ks_str virtual_path, ks_size* out_siz
     }
 }
 
-KS_API ks_bool ks_vfs_write_file(Ks_VFS vfs, ks_str virtual_path, const void* data, ks_size size) {
-    if (!vfs || !virtual_path || !data) return false;
+KS_API ks_bool ks_vfs_write_file(ks_str virtual_path, const void* data, ks_size size) {
+    if (!virtual_path || !data) return false;
 
-    std::string path = impl(vfs)->resolve_internal(virtual_path);
+    std::string path = g_vfs->resolve_internal(virtual_path);
     if (path.empty()) return false;
 
     fs::path p(path);

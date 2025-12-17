@@ -151,12 +151,10 @@ TEST_CASE("C API: Assets Manager") {
 
     SUBCASE("VFS Integration & Path Resolution") {
         Ks_AssetsManager am = create_test_env();
-        Ks_VFS vfs = ks_vfs_create();
+        ks_vfs_init();
 
-        bool mount_ok = ks_vfs_mount(vfs, "root", ".", true);
+        bool mount_ok = ks_vfs_mount("root", ".", true);
         REQUIRE(mount_ok);
-
-        ks_assets_manager_set_vfs(am, vfs);
 
         Ks_Handle h = ks_assets_manager_load_asset_from_file(am, "MyCAsset", "vfs_test", "root://my_texture.png");
 
@@ -175,7 +173,7 @@ TEST_CASE("C API: Assets Manager") {
         CHECK(is_absolute);
 
         ks_assets_manager_asset_release(am, h);
-        ks_vfs_destroy(vfs);
+        ks_vfs_shutdown();
         ks_assets_manager_destroy(am);
     }
 
