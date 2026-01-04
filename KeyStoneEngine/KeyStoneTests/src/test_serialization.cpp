@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 #include <keystone.h>
 #include <string>
+#include <string.h>
 
 typedef struct Vec3 { float x, y, z; } Vec3;
 typedef struct PlayerData {
