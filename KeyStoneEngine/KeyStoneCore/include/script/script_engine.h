@@ -24,7 +24,7 @@ extern "C" {
 typedef ks_ptr Ks_Script_Ctx;
 
 /** @brief Opaque pointer to a Usertype Builder helper. */
-typedef ks_ptr Ks_Script_Userytype_Builder;
+typedef ks_ptr Ks_Script_Usertype_Builder;
 
 /** @brief Integer reference to a script object stored in the registry. */
 typedef ks_int Ks_Script_Ref;
@@ -470,6 +470,11 @@ KS_API Ks_Script_Object ks_script_get_arg(Ks_Script_Ctx ctx, ks_stack_idx n);
 KS_API Ks_Script_Object ks_script_get_upvalue(Ks_Script_Ctx ctx, ks_upvalue_idx n);
 
 /**
+ * @brief Returns the number of arguments passed to the script function.
+ */
+KS_API ks_size ks_script_get_arg_count(Ks_Script_Ctx ctx);
+
+/**
  * @brief Calls a script function.
  * @param f Function to call.
  * @param n_args Number of arguments on stack.
@@ -535,51 +540,68 @@ KS_API Ks_UserData ks_script_usertype_get_body(Ks_Script_Ctx ctx, Ks_Script_Obje
 /**
  * @brief Begins definition of a new user type (class).
  */
-KS_API Ks_Script_Userytype_Builder ks_script_usertype_begin(Ks_Script_Ctx ctx, ks_str type_name, ks_size instance_size);
+KS_API Ks_Script_Usertype_Builder ks_script_usertype_begin(Ks_Script_Ctx ctx, ks_str type_name, ks_size instance_size);
 
-KS_API ks_no_ret ks_script_usertype_inherits_from(Ks_Script_Userytype_Builder builder, ks_str base_type_name);
+/**
+ * @brief Begins the definition of a Lua UserType by automatically importing fields from the Reflection System.
+ *
+ * This function looks up the type in the Reflection registry using `type_name`.
+ * It creates a new UserType builder and automatically registers all reflected fields
+ * as Lua properties (getters/setters), mapping C types to Lua types using memory offsets.
+ *
+ * @param ctx The script execution context.
+ * @param type_name The name of the type registered in the Reflection System.
+ * @return A pointer to the UserType builder. The user MUST call ks_script_usertype_end()
+ * after adding any additional manual methods or properties.
+ * Returns NULL if the type is not found in the reflection system.
+ */
+KS_API Ks_Script_Usertype_Builder ks_script_usertype_begin_from_ref(Ks_Script_Ctx ctx, const char* type_name);
+
+KS_API ks_no_ret ks_script_usertype_inherits_from(Ks_Script_Usertype_Builder builder, ks_str base_type_name);
 
 /**
  * @brief Registers constructor(s).
  * Use KS_SCRIPT_OVERLOAD for multiple constructors.
  */
-KS_API ks_no_ret ks_script_usertype_add_constructor(Ks_Script_Userytype_Builder builder, const Ks_Script_Sig_Def* sigs, ks_size count);
+KS_API ks_no_ret ks_script_usertype_add_constructor(Ks_Script_Usertype_Builder builder, const Ks_Script_Sig_Def* sigs, ks_size count);
 
 /** @brief Sets the destructor/finalizer. */
-KS_API ks_no_ret ks_script_usertype_set_destructor(Ks_Script_Userytype_Builder builder, ks_script_deallocator dtor);
+KS_API ks_no_ret ks_script_usertype_set_destructor(Ks_Script_Usertype_Builder builder, ks_script_deallocator dtor);
 
 /** 
  * @brief Registers instance methods. 
  * Use KS_SCRIPT_OVERLOAD for multiple constructors. 
 */
-KS_API ks_no_ret ks_script_usertype_add_method(Ks_Script_Userytype_Builder builder, ks_str name, const Ks_Script_Sig_Def* sigs, ks_size count);
+KS_API ks_no_ret ks_script_usertype_add_method(Ks_Script_Usertype_Builder builder, ks_str name, const Ks_Script_Sig_Def* sigs, ks_size count);
 
 /**
  * @brief Registers static methods.
  * Use KS_SCRIPT_OVERLOAD for multiple constructors.
 */
-KS_API ks_no_ret ks_script_usertype_add_static_method(Ks_Script_Userytype_Builder builder, ks_str name, const Ks_Script_Sig_Def* sigs, ks_size count);
+KS_API ks_no_ret ks_script_usertype_add_static_method(Ks_Script_Usertype_Builder builder, ks_str name, const Ks_Script_Sig_Def* sigs, ks_size count);
 
 /**
  * @brief Registers a Field (Direct Memory Access).
  * @note Use this for POD types and raw data members. Fast.
  */
-KS_API ks_no_ret ks_script_usertype_add_field(Ks_Script_Userytype_Builder builder, ks_str name, Ks_Type type, ks_size offset, ks_str type_alias);
+KS_API ks_no_ret ks_script_usertype_add_field(Ks_Script_Usertype_Builder builder, ks_str name, Ks_Type type, ks_size offset, ks_str type_alias);
 
 /**
  * @brief Registers a Property (Getter/Setter pair).
  * @note Use this for complex logic, validation, or virtual/polymorphic classes.
  */
-KS_API ks_no_ret ks_script_usertype_add_property(Ks_Script_Userytype_Builder builder, ks_str name, ks_script_cfunc getter, ks_script_cfunc setter);
+KS_API ks_no_ret ks_script_usertype_add_property(Ks_Script_Usertype_Builder builder, ks_str name, ks_script_cfunc getter, ks_script_cfunc setter);
 
 /** @brief Registers Lua metamethods (e.g., __add, __tostring). */
-KS_API ks_no_ret ks_script_usertype_add_metamethod(Ks_Script_Userytype_Builder builder, Ks_Script_Metamethod mt, ks_script_cfunc func);
+KS_API ks_no_ret ks_script_usertype_add_metamethod(Ks_Script_Usertype_Builder builder, Ks_Script_Metamethod mt, ks_script_cfunc func);
 
 /**
  * @brief Finalizes and registers the user type.
  * @param builder The builder handle (invalidated after call).
  */
-KS_API ks_no_ret ks_script_usertype_end(Ks_Script_Userytype_Builder builder);
+KS_API ks_no_ret ks_script_usertype_end(Ks_Script_Usertype_Builder builder);
+
+KS_API const char* ks_script_usertype_get_name(Ks_Script_Ctx ctx, Ks_Script_Object obj);
 
 /* --- API Enum Registration --- */
 

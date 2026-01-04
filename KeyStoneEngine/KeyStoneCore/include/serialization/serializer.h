@@ -92,6 +92,29 @@ KS_API ks_double ks_json_get_number(Ks_Json json);
 KS_API ks_bool ks_json_get_bool(Ks_Json json);
 KS_API ks_str ks_json_get_string(Ks_Json json);
 
+typedef void (*ks_json_foreach_cb)(ks_str key, Ks_Json val, void* user_data);
+KS_API ks_no_ret ks_json_object_foreach(Ks_Json obj, ks_json_foreach_cb cb, void* user_data);
+
+/**
+ * @brief Creates a JSON value (Object/Array/Primitive) from a reflected C type instance.
+ * * @param ser The serializer instance.
+ * @param instance Raw pointer to the C struct/data.
+ * @param type_name Name of the registered type (must be registered in Reflection).
+ * @return A new Ks_Json node containing the serialized data.
+ */
+KS_API Ks_Json ks_json_serialize(Ks_Serializer ser, const void* instance, ks_str type_name);
+
+/**
+ * @brief Deserializes a JSON tree into a C object using reflection metadata.
+ * Populates 'instance'. Allocates memory for pointers/strings using engine allocator.
+ * @param ser Serializer containing the JSON data.
+ * @param instance Pointer to the already allocated struct to populate.
+ * @param type_name Registered reflection type name.
+ * @param json_node The JSON node to read from (usually root).
+ * @return True on success.
+ */
+KS_API ks_bool ks_json_deserialize(Ks_Serializer ser, void* instance, ks_str type_name, Ks_Json json_node);
+
 #ifdef __cplusplus
 }
 #endif

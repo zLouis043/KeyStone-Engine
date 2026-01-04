@@ -1,7 +1,7 @@
 #include "../../include/core/types_binding.h"
 
 KS_API ks_no_ret ks_types_lua_bind(Ks_Script_Ctx ctx) {
-    ks_script_register_enum(ctx, "type",
+    ks_script_register_enum(ctx, "types",
         KS_SCRIPT_ENUM_MEMBER("UNKNOWN", KS_TYPE_UNKNOWN),
         KS_SCRIPT_ENUM_MEMBER("NIL", KS_TYPE_NIL),
         KS_SCRIPT_ENUM_MEMBER("VOID", KS_TYPE_VOID),

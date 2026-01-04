@@ -4,6 +4,7 @@
 #include <fstream>
 #include <cstdio>
 #include <thread>
+#include <string>
 
 #include "../include/common.h"
 
@@ -36,6 +37,41 @@ struct GameConfig {
     float volume;
 };
 
+struct LuaPlayerData {
+    int id;
+    float health;
+    bool is_alive;
+};
+
+void register_test_types() {
+    ks_reflection_init();
+
+    ks_reflect_struct(LuaPlayerData,
+        ks_reflect_field(int, id),
+        ks_reflect_field(float, health),
+        ks_reflect_field(bool, is_alive)
+    );
+}
+
+void bind_test_types(Ks_Script_Ctx ctx) {
+    auto b = ks_script_usertype_begin(ctx, "GameConfig", sizeof(GameConfig));
+    ks_script_usertype_add_constructor(b, KS_SCRIPT_FUNC_VOID([](Ks_Script_Ctx c) {
+        auto* p = (GameConfig*)ks_script_get_self(c); p->difficulty = 1; p->volume = 0.5f; return 0;
+        }));
+    ks_script_usertype_add_field(b, "difficulty", KS_TYPE_INT, offsetof(GameConfig, difficulty), nullptr);
+    ks_script_usertype_end(b);
+
+    auto b_player = ks_script_usertype_begin_from_ref(ctx, "LuaPlayerData");
+    if (b_player) {
+        ks_script_usertype_add_constructor(b_player, KS_SCRIPT_FUNC_VOID([](Ks_Script_Ctx c) {
+            auto* p = (LuaPlayerData*)ks_script_get_self(c);
+            p->id = 0; p->health = 100.0f; p->is_alive = true;
+            return 0;
+            }));
+        ks_script_usertype_end(b_player);
+    }
+}
+
 ks_returns_count test_set_received(Ks_Script_Ctx ctx) {
     g_c_int_val = (int)ks_script_obj_as_number(ctx, ks_script_get_arg(ctx, 1));
     const char* s = ks_script_obj_as_cstring(ctx, ks_script_get_arg(ctx, 2));
@@ -56,13 +92,13 @@ Ks_AssetData slow_load_lua(ks_str p) {
 void dummy_free(Ks_AssetData d) {}
 
 TEST_CASE("Managers-Lua bindings Tests") {
-	ks_memory_init();
+    ks_memory_init();
 
     ks_set_frame_capacity(128 * 1024);
 
     reset_c_globals();
 
-	Ks_Script_Ctx ctx = ks_script_create_ctx();
+    Ks_Script_Ctx ctx = ks_script_create_ctx();
 
     ks_types_lua_bind(ctx);
 
@@ -84,12 +120,16 @@ TEST_CASE("Managers-Lua bindings Tests") {
     Ks_TimeManager tm = ks_time_manager_create();
     ks_time_manager_lua_bind(ctx, tm);
 
+    register_test_types();
+
+    bind_test_types(ctx);
+
     ks_serializer_lua_bind(ctx);
 
-	SUBCASE("Assets Manager: Test Lua Bindings") {
-		Ks_IAsset interface;
-		interface.load_from_file_fn = my_asset_load_file;
-		interface.destroy_fn = my_asset_destroy;
+    SUBCASE("Assets Manager: Test Lua Bindings") {
+        Ks_IAsset interface;
+        interface.load_from_file_fn = my_asset_load_file;
+        interface.destroy_fn = my_asset_destroy;
 
         ks_assets_manager_register_asset_type(am, "MyAsset", interface);
 
@@ -124,7 +164,7 @@ TEST_CASE("Managers-Lua bindings Tests") {
         ks_str ret_str = ks_script_obj_as_cstring(ctx, ks_script_call_get_return_at(ctx, res, 2));
         REQUIRE(ret_str != nullptr);
         CHECK(strcmp(ret_str, "Success") == 0);
-	}
+    }
 
     SUBCASE("Assets Manager: Transparent Proxy & Hot Reload") {
         struct MyTestAsset { int id; float value; };
@@ -135,10 +175,10 @@ TEST_CASE("Managers-Lua bindings Tests") {
             a->id = 100;
             a->value = 3.14f;
             return a;
-        };
+            };
         interface.destroy_fn = [](ks_ptr data) {
             delete (MyTestAsset*)data;
-        };
+            };
 
         ks_assets_manager_register_asset_type(am, "MyTestAsset", interface);
 
@@ -149,11 +189,11 @@ TEST_CASE("Managers-Lua bindings Tests") {
 
         const char* script = R"(
             local asset = assets.load("MyTestAsset", "test_item", "dummy_path")
-       
+        
             if assets.valid(asset) == 0 then return "Load Failed" end
             local val1 = asset.id
             asset.value = 90.5
-           
+            
             return val1, asset.value
         )";
 
@@ -186,7 +226,7 @@ TEST_CASE("Managers-Lua bindings Tests") {
 
         const char* script = R"(
             local h = assets.load_async("Slow", "bg_music", "music.mp3")
-       
+        
             local s1 = assets.state(h)
         
             return s1
@@ -236,7 +276,7 @@ TEST_CASE("Managers-Lua bindings Tests") {
 
     SUBCASE("Event Manager: Lua Register -> C++ Subscribe -> Lua Publish") {
         const char* setup_script = R"(
-            local h = events.register("Lua_Event", {type.INT, type.CSTRING})
+            local h = events.register("Lua_Event", {types.INT, types.CSTRING})
             return h
         )";
 
@@ -262,7 +302,7 @@ TEST_CASE("Managers-Lua bindings Tests") {
 
     SUBCASE("Event Manager: Lua Register -> Lua Subscribe -> Lua Publish (Loopback)") {
         const char* script = R"(
-            local h = events.register("Loop_Event", {type.BOOL})
+            local h = events.register("Loop_Event", {types.BOOL})
             local received_val = false
             
             events.subscribe(h, function(b)
@@ -309,9 +349,9 @@ TEST_CASE("Managers-Lua bindings Tests") {
             ks_script_end_scope(ctx);
 
             return ks_true;
-        };
+            };
 
-        ks_event_manager_subscribe(em, evt, verify_table_cb, Ks_Payload{nullptr});
+        ks_event_manager_subscribe(em, evt, verify_table_cb, Ks_Payload{ nullptr });
 
         const char* script = R"(
             local h = events.get("Table_Event")
@@ -327,7 +367,7 @@ TEST_CASE("Managers-Lua bindings Tests") {
         size_t perm_alloc_before = stats_before.permanent_allocated;
 
         const char* script = R"(
-            local h = events.register("LeakTest", {type.INT})
+            local h = events.register("LeakTest", {types.INT})
             local count = 0
             
             local sub = events.subscribe(h, function(val)
@@ -460,8 +500,6 @@ TEST_CASE("Managers-Lua bindings Tests") {
         }
 
         CHECK(ks_state_get_int(sm, h_state) == 1);
-
-        
     }
 
     SUBCASE("ScriptEnv: Granular Dependency Reloading") {
@@ -588,6 +626,103 @@ TEST_CASE("Managers-Lua bindings Tests") {
         CHECK(ks_script_call_succeded(ctx, res));
     }
 
+    SUBCASE("Serializer: Smart Reflection Binding") {
+
+        const char* script = R"(
+            local ser = Serializer()
+            
+            local p = LuaPlayerData()
+            p.id = 777
+            p.health = 50.5
+            p.is_alive = false
+
+            local json = ser:serialize(p)
+            
+            if json:get("id"):as_number() ~= 777 then return "JSON ID Mismatch" end
+            
+            local p2 = ser:deserialize(json)
+            
+            if not p2 then return "Deserialize Failed" end
+            
+            if p2.id ~= 777 then return "Restored ID Mismatch" end
+            if p2.health ~= 50.5 then return "Restored Health Mismatch" end
+            if p2.is_alive ~= false then return "Restored Bool Mismatch" end
+
+            return "OK"
+        )";
+
+        Ks_Script_Function_Call_Result res = ks_script_do_cstring(ctx, script);
+
+        if (!ks_script_call_succeded(ctx, res)) {
+            FAIL(ks_script_get_last_error_str(ctx));
+        }
+
+        const char* ret = ks_script_obj_as_cstring(ctx, ks_script_call_get_return(ctx, res));
+        CHECK(strcmp(ret, "OK") == 0);
+    }
+
+    SUBCASE("Serializer: Lua Table & Mixed Types") {
+        const char* script = R"(
+            local ser = Serializer()
+
+            local t = { 
+                my_key = "my_val", 
+                sub_arr = {10, 20} 
+            }
+            local json = ser:serialize(t)
+            
+            local root = ser:root()
+            root:add("res", json)
+            
+            local s = ser:dump_string()
+            
+            if string.find(s, "my_key") == nil then return "Serialize Table Key Missing" end
+            if string.find(s, "10.0") == nil then return "Serialize Table Array Missing" end
+
+            local json_str = '{"simple": "yes", "nested": {"a": 1}}'
+            ser:load_string(json_str)
+            
+            local tbl = ser:deserialize(ser:root())
+            
+            if type(tbl) ~= "table" then return "Deserialize Type Mismatch" end
+            if tbl.simple ~= "yes" then return "Deserialize Value Mismatch" end
+            if tbl.nested.a ~= 1 then return "Deserialize Nested Mismatch" end
+
+            return "OK"
+        )";
+
+        Ks_Script_Function_Call_Result res = ks_script_do_cstring(ctx, script);
+
+        if (!ks_script_call_succeded(ctx, res)) {
+            FAIL(ks_script_get_last_error_str(ctx));
+        }
+
+        const char* ret = ks_script_obj_as_cstring(ctx, ks_script_call_get_return(ctx, res));
+        CHECK(strcmp(ret, "OK") == 0);
+    }
+
+    SUBCASE("Serializer: Manual JSON Construction") {
+        const char* script = R"(
+            local ser = Serializer()
+            local root = ser:object()
+            
+            root:add("score", ser:number(100))
+            root:add("name", ser:string("Player1"))
+            
+            local arr = ser:array()
+            arr:push(ser:number(1))
+            arr:push(ser:number(2))
+            root:add("items", arr)
+            
+            return root:get("score"):as_number(), root:get("items"):size()
+        )";
+
+        Ks_Script_Function_Call_Result res = ks_script_do_cstring(ctx, script);
+        CHECK(ks_script_call_succeded(ctx, res));
+        CHECK(ks_script_obj_as_number(ctx, ks_script_call_get_return_at(ctx, res, 1)) == 100.0);
+        CHECK(ks_script_obj_as_integer(ctx, ks_script_call_get_return_at(ctx, res, 2)) == 2);
+    }
+
     ks_time_manager_destroy(tm);
 
     ks_state_manager_destroy(sm);
@@ -600,7 +735,8 @@ TEST_CASE("Managers-Lua bindings Tests") {
 
     ks_job_manager_destroy(job);
 
-	ks_script_destroy_ctx(ctx);
+    ks_script_destroy_ctx(ctx);
 
-	ks_memory_shutdown();
+    ks_reflection_shutdown();
+    ks_memory_shutdown();
 }

@@ -2,6 +2,7 @@
 #include "../../include/script/script_engine_internal.h"
 #include "../../include/memory/memory.h"
 #include "../../include/core/log.h"
+#include "../../include/core/reflection.h"
 #include "../../include/profiler/profiler.h"
 
 #ifdef __cplusplus
@@ -63,6 +64,7 @@ static void chain_usertype_tables(lua_State* L, int child_idx, const std::string
 static void save_usertype_table(lua_State* L, int table_idx, const std::string& type_name, const char* table_suffix);
 static std::vector<MethodInfo> convert_sigs(const Ks_Script_Sig_Def* sigs, size_t count, const char* name = "");
 static int enum_newindex_error(lua_State* L);
+static void add_reflected_property(Ks_Script_Usertype_Builder builder, const Ks_Field_Info* field);
 
 static int ks_script_error_handler(lua_State* L);
 
@@ -769,19 +771,61 @@ Ks_UserData ks_script_usertype_get_body(Ks_Script_Ctx ctx, Ks_Script_Object obj)
     return result;
 }
 
-KS_API Ks_Script_Userytype_Builder ks_script_usertype_begin(Ks_Script_Ctx ctx, ks_str type_name, ks_size instance_size)
+KS_API Ks_Script_Usertype_Builder ks_script_usertype_begin(Ks_Script_Ctx ctx, ks_str type_name, ks_size instance_size)
 {
     void* mem = ks_alloc_debug(sizeof(KsUsertypeBuilder), KS_LT_USER_MANAGED, KS_TAG_INTERNAL_DATA, "UsertypeBuilder");
     return new(mem) KsUsertypeBuilder(ctx, type_name, instance_size);
 }
 
-KS_API ks_no_ret ks_script_usertype_inherits_from(Ks_Script_Userytype_Builder builder, ks_str base_type_name)
+KS_API Ks_Script_Usertype_Builder ks_script_usertype_begin_from_ref(Ks_Script_Ctx ctx, const char* type_name) {
+    const Ks_Type_Info* info = ks_reflection_get_type(type_name);
+
+    if (!info) {
+        KS_LOG_ERROR("[Script] ks_script_usertype_begin_from_ref failed: Type '%s' not registered in Reflection.", type_name);
+        return nullptr;
+    }
+
+    if (info->kind == KS_META_ENUM) {
+        if (info->enum_count > 0) {
+            lua_State* L = (lua_State*)ctx;
+
+            lua_newtable(L);
+
+            for (size_t i = 0; i < info->enum_count; ++i) {
+                const Ks_Enum_Item* item = &info->enum_items[i];
+                lua_pushstring(L, item->name);
+                lua_pushinteger(L, (lua_Integer)item->value);
+                lua_settable(L, -3);
+            }
+
+            lua_setglobal(L, info->name);;
+        }
+
+        return nullptr;
+    }
+
+    Ks_Script_Usertype_Builder builder = ks_script_usertype_begin(ctx, info->name, info->size);
+
+    if (!builder) {
+        KS_LOG_ERROR("[Script] Failed to create usertype builder for '%s'.", type_name);
+        return nullptr;
+    }
+
+    for (size_t i = 0; i < info->field_count; ++i) {
+        const Ks_Field_Info* field = &info->fields[i];
+        add_reflected_property(builder, field);
+    }
+
+    return builder;
+}
+
+KS_API ks_no_ret ks_script_usertype_inherits_from(Ks_Script_Usertype_Builder builder, ks_str base_type_name)
 {
     auto* b = static_cast<KsUsertypeBuilder*>(builder);
     if (b && base_type_name) b->base_type_name = base_type_name;
 }
 
-KS_API ks_no_ret ks_script_usertype_add_constructor(Ks_Script_Userytype_Builder builder, const Ks_Script_Sig_Def* sigs, ks_size count)
+KS_API ks_no_ret ks_script_usertype_add_constructor(Ks_Script_Usertype_Builder builder, const Ks_Script_Sig_Def* sigs, ks_size count)
 {
     auto* b = static_cast<KsUsertypeBuilder*>(builder);
     if (!b || !sigs || count == 0) return;
@@ -791,13 +835,13 @@ KS_API ks_no_ret ks_script_usertype_add_constructor(Ks_Script_Userytype_Builder 
     ctor_vec.insert(ctor_vec.end(), infos.begin(), infos.end());
 }
 
-KS_API ks_no_ret ks_script_usertype_set_destructor(Ks_Script_Userytype_Builder builder, ks_script_deallocator dtor)
+KS_API ks_no_ret ks_script_usertype_set_destructor(Ks_Script_Usertype_Builder builder, ks_script_deallocator dtor)
 {
     auto* b = static_cast<KsUsertypeBuilder*>(builder);
     if (b) b->destructor = dtor;
 }
 
-KS_API ks_no_ret ks_script_usertype_add_method(Ks_Script_Userytype_Builder builder, ks_str name, const Ks_Script_Sig_Def* sigs, ks_size count)
+KS_API ks_no_ret ks_script_usertype_add_method(Ks_Script_Usertype_Builder builder, ks_str name, const Ks_Script_Sig_Def* sigs, ks_size count)
 {
     auto* b = static_cast<KsUsertypeBuilder*>(builder);
     if (!b || !name || !sigs || count == 0) return;
@@ -807,7 +851,7 @@ KS_API ks_no_ret ks_script_usertype_add_method(Ks_Script_Userytype_Builder build
     method_vec.insert(method_vec.end(), infos.begin(), infos.end());
 }
 
-KS_API ks_no_ret ks_script_usertype_add_static_method(Ks_Script_Userytype_Builder builder, ks_str name, const Ks_Script_Sig_Def* sigs, ks_size count)
+KS_API ks_no_ret ks_script_usertype_add_static_method(Ks_Script_Usertype_Builder builder, ks_str name, const Ks_Script_Sig_Def* sigs, ks_size count)
 {
     auto* b = static_cast<KsUsertypeBuilder*>(builder);
     if (!b || !name || !sigs || count == 0) return;
@@ -818,7 +862,7 @@ KS_API ks_no_ret ks_script_usertype_add_static_method(Ks_Script_Userytype_Builde
 }
 
 KS_API
-ks_no_ret ks_script_usertype_add_field(Ks_Script_Userytype_Builder builder, ks_str name, Ks_Type type, ks_size offset, ks_str type_alias)
+ks_no_ret ks_script_usertype_add_field(Ks_Script_Usertype_Builder builder, ks_str name, Ks_Type type, ks_size offset, ks_str type_alias)
 {
     auto* b = static_cast<KsUsertypeBuilder*>(builder);
     if (b && name) {
@@ -826,19 +870,19 @@ ks_no_ret ks_script_usertype_add_field(Ks_Script_Userytype_Builder builder, ks_s
         b->fields.push_back({ name, type, offset, tname });
     }
 }
-ks_no_ret ks_script_usertype_add_property(Ks_Script_Userytype_Builder builder, ks_str name, ks_script_cfunc getter, ks_script_cfunc setter)
+ks_no_ret ks_script_usertype_add_property(Ks_Script_Usertype_Builder builder, ks_str name, ks_script_cfunc getter, ks_script_cfunc setter)
 {
     auto* b = static_cast<KsUsertypeBuilder*>(builder);
     if (b && name) b->properties.push_back({ name, getter, setter });
 }
 
-KS_API ks_no_ret ks_script_usertype_add_metamethod(Ks_Script_Userytype_Builder builder, Ks_Script_Metamethod mt, ks_script_cfunc func)
+KS_API ks_no_ret ks_script_usertype_add_metamethod(Ks_Script_Usertype_Builder builder, Ks_Script_Metamethod mt, ks_script_cfunc func)
 {
     auto* b = static_cast<KsUsertypeBuilder*>(builder);
     if (b && func) b->metamethods[mt] = func;
 }
 
-KS_API ks_no_ret ks_script_usertype_end(Ks_Script_Userytype_Builder builder)
+KS_API ks_no_ret ks_script_usertype_end(Ks_Script_Usertype_Builder builder)
 {
     if (!builder) return;
     auto* b = reinterpret_cast<KsUsertypeBuilder*>(builder);
@@ -968,6 +1012,37 @@ KS_API ks_no_ret ks_script_usertype_end(Ks_Script_Userytype_Builder builder)
 
     b->~KsUsertypeBuilder();
     ks_dealloc(b);
+}
+
+KS_API const char* ks_script_usertype_get_name(Ks_Script_Ctx ctx, Ks_Script_Object obj) {
+    auto* sctx = static_cast<KsScriptEngineCtx*>(ctx);
+    lua_State* L = sctx->get_raw_state();
+
+    if (obj.type != KS_TYPE_USERDATA) return nullptr;
+
+    lua_rawgeti(L, LUA_REGISTRYINDEX, obj.val.userdata_ref);
+
+    if (!lua_isuserdata(L, -1)) {
+        lua_pop(L, 1);
+        return nullptr;
+    }
+
+    if (!lua_getmetatable(L, -1)) {
+        lua_pop(L, 1);
+        return nullptr;
+    }
+
+    lua_pushstring(L, "__ks_usertype_name");
+    lua_rawget(L, -2);
+
+    const char* name = nullptr;
+    if (lua_isstring(L, -1)) {
+        name = lua_tostring(L, -1);
+    }
+
+    lua_pop(L, 3);
+
+    return name;
 }
 
 KS_API ks_no_ret ks_script_register_enum_impl(Ks_Script_Ctx ctx, ks_str enum_name, const Ks_Script_Enum_Member* members, ks_size count)
@@ -2502,6 +2577,11 @@ Ks_Script_Object ks_script_get_upvalue(Ks_Script_Ctx ctx, ks_upvalue_idx n)
     return ks_script_stack_pop_obj(ctx);
 }
 
+ks_size ks_script_get_arg_count(Ks_Script_Ctx ctx)
+{
+    return lua_gettop((lua_State*)ctx);
+}
+
 KS_API ks_no_ret ks_script_func_call(Ks_Script_Ctx ctx, Ks_Script_Function f, ks_size n_args, ks_size n_rets)
 {
     KS_PROFILE_FUNCTION();
@@ -2919,6 +2999,15 @@ static int usertype_field_getter_thunk(lua_State* L) {
     default: lua_pushnil(L); break;
     }
     return 1;
+}
+
+static void add_reflected_property(Ks_Script_Usertype_Builder builder, const Ks_Field_Info* field) {
+    if (field->is_array || field->is_bitfield) {
+        return;
+    }
+
+
+    ks_script_usertype_add_field(builder, field->name, field->type, field->offset, nullptr);
 }
 
 static int usertype_field_setter_thunk(lua_State* L) {

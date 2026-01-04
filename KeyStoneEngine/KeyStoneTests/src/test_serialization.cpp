@@ -2,6 +2,41 @@
 #include <keystone.h>
 #include <string>
 
+typedef struct Vec3 { float x, y, z; } Vec3;
+typedef struct PlayerData {
+    const char* name;
+    int level;
+    Vec3 position;
+    int scores[3];
+} PlayerData;
+
+typedef struct Node {
+    int val;
+    struct Node* next;
+} Node;
+
+void RegisterSerializationTypes() {
+    ks_reflection_init();
+
+    ks_reflect_struct(Vec3,
+        ks_reflect_field(float, x),
+        ks_reflect_field(float, y),
+        ks_reflect_field(float, z)
+    );
+
+    ks_reflect_struct(PlayerData,
+        ks_reflect_field(const char*, name),
+        ks_reflect_field(int, level),
+        ks_reflect_field(Vec3, position),
+        ks_reflect_field(int, scores, [3])
+    );
+
+    ks_reflect_struct(Node,
+        ks_reflect_field(int, val),
+        ks_reflect_field(Node*, next)
+    );
+}
+
 TEST_CASE("C API: Serializer System") {
     ks_memory_init();
 
@@ -153,6 +188,95 @@ TEST_CASE("C API: Serializer System") {
         Ks_Serializer ser = ks_serializer_create();
         bool ok = ks_serializer_load_from_string(ser, "{\"key\": 1");
         CHECK(ok == ks_false);
+        ks_serializer_destroy(ser);
+    }
+
+    SUBCASE("Serialization/Reflection") {
+        RegisterSerializationTypes();
+
+        Ks_Serializer ser = ks_serializer_create();
+
+        PlayerData p;
+        p.name = "Hero";
+        p.level = 99;
+        p.position = { 10.0f, 20.0f, 30.0f };
+        p.scores[0] = 100; p.scores[1] = 200; p.scores[2] = 300;
+
+        Ks_Json root = ks_json_serialize(ser, &p, "PlayerData");
+
+        CHECK(ks_json_get_type(root) == KS_JSON_OBJECT);
+
+        Ks_Json j_name = ks_json_object_get(root, "name");
+        CHECK(strcmp(ks_json_get_string(j_name), "Hero") == 0);
+
+        Ks_Json j_pos = ks_json_object_get(root, "position");
+        CHECK(ks_json_get_type(j_pos) == KS_JSON_OBJECT);
+        CHECK(ks_json_get_number(ks_json_object_get(j_pos, "y")) == 20.0f);
+
+        Ks_Json j_scores = ks_json_object_get(root, "scores");
+        CHECK(ks_json_get_type(j_scores) == KS_JSON_ARRAY);
+        CHECK(ks_json_array_size(j_scores) == 3);
+        CHECK(ks_json_get_number(ks_json_array_get(j_scores, 2)) == 300.0);
+
+        ks_serializer_destroy(ser);
+        ks_reflection_shutdown();
+    }
+
+    SUBCASE("Deserialization/Reflection") {
+        RegisterSerializationTypes();
+        Ks_Serializer ser = ks_serializer_create();
+
+        const char* json_input = R"({
+            "name": "DeserializedHero",
+            "level": 50,
+            "position": { "x": 1.0, "y": 2.0, "z": 3.0 },
+            "scores": [ 10, 20, 30 ]
+        })";
+
+        ks_serializer_load_from_string(ser, json_input);
+        Ks_Json root = ks_serializer_get_root(ser);
+
+        PlayerData p_out;
+        p_out.name = nullptr;
+
+        bool ok = ks_json_deserialize(ser, &p_out, "PlayerData", root);
+        CHECK(ok == true);
+
+        CHECK(strcmp(p_out.name, "DeserializedHero") == 0);
+        CHECK(p_out.level == 50);
+        CHECK(p_out.position.x == 1.0f);
+        CHECK(p_out.position.y == 2.0f);
+        CHECK(p_out.scores[2] == 30);
+
+        if (p_out.name) ks_dealloc((void*)p_out.name);
+
+        ks_serializer_destroy(ser);
+        ks_reflection_shutdown();
+    }
+
+    SUBCASE("Iteration (Object Foreach)") {
+        Ks_Serializer ser = ks_serializer_create();
+        Ks_Json obj = ks_json_create_object(ser);
+
+        ks_json_object_add(ser, obj, "alpha", ks_json_create_number(ser, 10));
+        ks_json_object_add(ser, obj, "beta", ks_json_create_bool(ser, ks_true));
+        ks_json_object_add(ser, obj, "gamma", ks_json_create_string(ser, "test"));
+
+        int count = 0;
+        bool found_alpha = false;
+
+        auto cb = [](ks_str key, Ks_Json val, void* user_data) {
+            int* c = (int*)user_data;
+            (*c)++;
+            if (std::string(key) == "alpha") {
+                CHECK(ks_json_get_number(val) == 10.0);
+            }
+        };
+
+        ks_json_object_foreach(obj, cb, &count);
+
+        CHECK(count == 3);
+
         ks_serializer_destroy(ser);
     }
 
