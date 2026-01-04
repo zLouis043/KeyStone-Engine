@@ -3,6 +3,7 @@
 #include "./include/core/defines.h"
 #include "./include/core/types.h"
 #include "./include/core/types_binding.h"
+#include "./include/core/reflection.h"
 #include "./include/core/log.h"
 #include "./include/memory/memory.h"
 #include "./include/core/handle.h"
