@@ -177,7 +177,7 @@ ks_returns_count l_assets_state(Ks_Script_Ctx ctx) {
     case KS_ASSET_STATE_READY: s_str = "ready"; break;
     case KS_ASSET_STATE_FAILED: s_str = "failed"; break;
     }
-    ks_script_stack_push_string(ctx, s_str);
+    ks_script_stack_push_cstring(ctx, s_str);
     return 1;
 }
 

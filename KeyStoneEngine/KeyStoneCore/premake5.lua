@@ -28,7 +28,8 @@ project("KeyStoneCore")
 	})
 
 	links({
-		"lua"
+		"lua",
+		"ffi"
 	})
 
 	defines({

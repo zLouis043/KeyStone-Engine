@@ -177,5 +177,6 @@ TEST_CASE("C API: Assets Manager") {
         ks_assets_manager_destroy(am);
     }
 
+    ks_reflection_shutdown();
     ks_memory_shutdown();
 }

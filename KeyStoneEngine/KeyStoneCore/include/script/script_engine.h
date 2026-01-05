@@ -376,7 +376,7 @@ KS_API ks_no_ret ks_script_dump_registry(Ks_Script_Ctx ctx);
 KS_API ks_no_ret ks_script_stack_push_number(Ks_Script_Ctx ctx, ks_double val);
 KS_API ks_no_ret ks_script_stack_push_integer(Ks_Script_Ctx ctx, ks_int64 val);
 KS_API ks_no_ret ks_script_stack_push_boolean(Ks_Script_Ctx ctx, ks_bool val);
-KS_API ks_no_ret ks_script_stack_push_string(Ks_Script_Ctx ctx, ks_str val);
+KS_API ks_no_ret ks_script_stack_push_cstring(Ks_Script_Ctx ctx, ks_str val);
 KS_API ks_no_ret ks_script_stack_push_obj(Ks_Script_Ctx ctx, Ks_Script_Object val);
 
 KS_API ks_double ks_script_stack_pop_number(Ks_Script_Ctx ctx);

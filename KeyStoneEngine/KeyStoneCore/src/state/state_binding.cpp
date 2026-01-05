@@ -26,7 +26,7 @@ ks_returns_count l_stateref_get(Ks_Script_Ctx ctx) {
         ks_script_stack_push_boolean(ctx, ks_state_get_bool(self->sm, self->handle));
         break;
     case KS_TYPE_CSTRING:
-        ks_script_stack_push_string(ctx, ks_state_get_string(self->sm, self->handle));
+        ks_script_stack_push_cstring(ctx, ks_state_get_string(self->sm, self->handle));
         break;
     case KS_TYPE_USERDATA: {
         const char* type_name;

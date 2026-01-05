@@ -31,7 +31,7 @@ if not exist vcpkg.exe (
 )
 
 vcpkg.exe install lua:x64-windows-static
-vcpkg.exe install sol2:x64-windows-static
+vcpkg.exe install libffi:x64-windows-static
 vcpkg.exe install spdlog:x64-windows-static
 vcpkg.exe install rapidjson:x64-windows-static
 vcpkg.exe install doctest:x64-windows-static

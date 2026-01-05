@@ -59,7 +59,7 @@ struct ScriptEnv_Impl {
         const char* filename = ks_script_resolve_module_path(ctx, mod_name);
 
         if (!filename) {
-            ks_script_stack_push_string(ctx, "\n\t[ScriptEnv]: Module path not found via package.path");
+            ks_script_stack_push_cstring(ctx, "\n\t[ScriptEnv]: Module path not found via package.path");
             return 1;
         }
 
@@ -72,7 +72,7 @@ struct ScriptEnv_Impl {
 
         if (!ks_script_obj_is_valid(ctx, chunk)) {
             ks_str err = ks_script_get_last_error_str(ctx);
-            ks_script_stack_push_string(ctx, err ? err : "Unknown load error");
+            ks_script_stack_push_cstring(ctx, err ? err : "Unknown load error");
             return 1;
         }
 

@@ -17,6 +17,7 @@ extern "C" {
 #include <string.h>
 #include "../memory/memory.h"
 #include "../core/log.h"
+#include "../core/reflection.h"
 
 struct CallFrame {
 	int arg_offset = 0;
@@ -190,6 +191,13 @@ struct FieldInfo {
 	std::string type_name;
 };
 
+struct DispatcherCandidate {
+	ks_script_cfunc func = nullptr;
+	const Ks_VTable_Entry* entry = nullptr;
+
+	std::vector<Ks_Type> signature;
+};
+
 struct KsUsertypeBuilder {
 	Ks_Script_Ctx ctx;
 	std::string type_name;
@@ -205,6 +213,11 @@ struct KsUsertypeBuilder {
 	std::vector<PropertyInfo> properties;
 	std::vector<FieldInfo> fields;
 	std::map<Ks_Script_Metamethod, ks_script_cfunc> metamethods;
+
+	std::vector<const Ks_VTable_Entry*> reflected_methods;
+	std::vector<const Ks_VTable_Entry*> reflected_static_methods;
+	std::vector<const Ks_VTable_Entry*> reflected_constructors;
+	const Ks_VTable_Entry* reflected_destructor = nullptr;
 
 	KsUsertypeBuilder(Ks_Script_Ctx c, const char* name, size_t instance_size) : 
 		ctx(c), type_name(name) , instance_size(instance_size)

@@ -25,7 +25,7 @@ chmod +x bootstrap-vcpkg.sh
 ./bootstrap-vcpkg.sh
 
 ./vcpkg install lua
-./vcpkg install sol2
+./vcpkg install libffi
 ./vcpkg install spdlog
 ./vcpkg install rapidjson
 ./vcpkg install doctest

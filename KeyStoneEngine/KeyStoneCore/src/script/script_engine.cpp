@@ -11,8 +11,16 @@ extern "C" {
     #include <lua.h>
     #include <lauxlib.h>
     #include <lualib.h>
+    #include <ffi.h>
 #ifdef __cplusplus
 }
+#endif
+
+
+#if defined(_MSC_VER)
+#include <malloc.h>
+#else
+#include <alloca.h>
 #endif
 
 #include <string.h>
@@ -44,6 +52,16 @@ struct KsUsertypeInstanceHandle {
     bool is_borrowed;
 };
 
+union FFIArgValue {
+    int i;
+    unsigned int u;
+    float f;
+    double d;
+    void* p;
+    uint8_t b;
+    char c;
+};
+
 static void* lua_custom_Alloc(void* ud, void* ptr, size_t osize, size_t nsize);
 static Ks_Type lua_type_to_ks(lua_State* L, int idx);
 static ks_str ks_metamethod_to_str(Ks_Script_Metamethod mt);
@@ -57,7 +75,7 @@ static int generic_cfunc_thunk(lua_State* L);
 static int instance_method_thunk(lua_State* L);
 static int usertype_field_getter_thunk(lua_State* L);
 static int usertype_field_setter_thunk(lua_State* L);
-static void push_overload_dispatcher(lua_State* L, const std::vector<MethodInfo>& overloads, DispatchMode mode, ks_size instance_size = 0, const char* type_name = nullptr, ks_size n_user_upvalues = 0);
+static void push_overload_dispatcher(lua_State* L, const std::vector<DispatcherCandidate>& overloads, DispatchMode mode, ks_size instance_size = 0, const char* type_name = nullptr, ks_size n_user_upvalues = 0);
 static bool check_signature_match(lua_State* L, int sig_tbl_idx, int start_idx, int args_to_check);
 static void register_methods_to_table(lua_State* L, int table_idx, const std::map<std::string, std::vector<MethodInfo>>& methods_map, DispatchMode mode);
 static void chain_usertype_tables(lua_State* L, int child_idx, const std::string& base_name, const char* table_suffix);
@@ -65,6 +83,14 @@ static void save_usertype_table(lua_State* L, int table_idx, const std::string& 
 static std::vector<MethodInfo> convert_sigs(const Ks_Script_Sig_Def* sigs, size_t count, const char* name = "");
 static int enum_newindex_error(lua_State* L);
 static void add_reflected_property(Ks_Script_Usertype_Builder builder, const Ks_Field_Info* field);
+static ffi_type* ks_type_to_ffi(Ks_Type type);
+static int perform_ffi_call(lua_State* L, const Ks_VTable_Entry* entry, void* self_ptr, int lua_arg_start);
+static int reflection_method_thunk(lua_State* L);
+static int reflection_constructor_thunk(lua_State* L);
+static std::string generate_signature(const Ks_VTable_Entry* entry);
+static std::vector<Ks_Type> extract_signature(const Ks_VTable_Entry* entry);
+static std::vector<Ks_Type> parse_signature_string(const std::string& sig);
+static bool is_script_aware_signature(const Ks_VTable_Entry* entry);
 
 static int ks_script_error_handler(lua_State* L);
 
@@ -191,7 +217,17 @@ KS_API Ks_Script_Function ks_script_create_cfunc(Ks_Script_Ctx ctx, const Ks_Scr
     }
     else {
         std::vector<MethodInfo> infos = convert_sigs(sigs, count);
-        push_overload_dispatcher(L, infos, DISPATCH_NORMAL);
+        std::vector<DispatcherCandidate> candidates;
+        candidates.reserve(infos.size());
+
+        for (const auto& info : infos) {
+            DispatcherCandidate c;
+            c.func = info.func;
+            c.signature = info.signature;
+            candidates.push_back(c);
+        }
+
+        push_overload_dispatcher(L, candidates, DISPATCH_NORMAL, 0, nullptr, 0);
     }
 
     Ks_Script_Function obj;
@@ -216,7 +252,17 @@ KS_API Ks_Script_Function ks_script_create_cfunc_with_upvalues(Ks_Script_Ctx ctx
     }
     else {
         std::vector<MethodInfo> infos = convert_sigs(sigs, count);
-        push_overload_dispatcher(L, infos, DISPATCH_NORMAL, 0, nullptr, n_upvalues);
+        std::vector<DispatcherCandidate> candidates;
+        candidates.reserve(infos.size());
+
+        for (const auto& info : infos) {
+            DispatcherCandidate c;
+            c.func = info.func;
+            c.signature = info.signature;
+            candidates.push_back(c);
+        }
+
+        push_overload_dispatcher(L, candidates, DISPATCH_NORMAL, 0, nullptr, n_upvalues);
     }
 
     Ks_Script_Function obj;
@@ -779,44 +825,41 @@ KS_API Ks_Script_Usertype_Builder ks_script_usertype_begin(Ks_Script_Ctx ctx, ks
 
 KS_API Ks_Script_Usertype_Builder ks_script_usertype_begin_from_ref(Ks_Script_Ctx ctx, const char* type_name) {
     const Ks_Type_Info* info = ks_reflection_get_type(type_name);
-
     if (!info) {
-        KS_LOG_ERROR("[Script] ks_script_usertype_begin_from_ref failed: Type '%s' not registered in Reflection.", type_name);
+        KS_LOG_ERROR("[Script] Reflection type '%s' not found.", type_name);
         return nullptr;
     }
 
-    if (info->kind == KS_META_ENUM) {
-        if (info->enum_count > 0) {
-            lua_State* L = (lua_State*)ctx;
-
-            lua_newtable(L);
-
-            for (size_t i = 0; i < info->enum_count; ++i) {
-                const Ks_Enum_Item* item = &info->enum_items[i];
-                lua_pushstring(L, item->name);
-                lua_pushinteger(L, (lua_Integer)item->value);
-                lua_settable(L, -3);
-            }
-
-            lua_setglobal(L, info->name);;
-        }
-
-        return nullptr;
-    }
-
-    Ks_Script_Usertype_Builder builder = ks_script_usertype_begin(ctx, info->name, info->size);
-
-    if (!builder) {
-        KS_LOG_ERROR("[Script] Failed to create usertype builder for '%s'.", type_name);
-        return nullptr;
-    }
+    auto b = ks_script_usertype_begin(ctx, type_name, info->size);
+    auto* bi = reinterpret_cast<KsUsertypeBuilder*>(b);
 
     for (size_t i = 0; i < info->field_count; ++i) {
-        const Ks_Field_Info* field = &info->fields[i];
-        add_reflected_property(builder, field);
+        const Ks_Field_Info& f = info->fields[i];
+        if (!f.is_function_ptr && !f.is_array && !f.is_bitfield) {
+            ks_script_usertype_add_field(b, f.name, f.type, f.offset, f.type_str);
+        }
     }
 
-    return builder;
+    if (info->vtable) {
+        for (size_t i = 0; i < info->vtable_count; ++i) {
+            const Ks_VTable_Entry* entry = &info->vtable[i];
+
+            if (entry->kind == KS_FUNC_CONSTRUCTOR) {
+                bi->reflected_constructors.push_back(entry);
+            }
+            else if (entry->kind == KS_FUNC_DESTRUCTOR) {
+                bi->reflected_destructor = entry;
+            }
+            else if (entry->kind == KS_FUNC_STATIC) {
+                bi->reflected_static_methods.push_back(entry);
+            }
+            else if (entry->kind == KS_FUNC_METHOD) {
+                bi->reflected_methods.push_back(entry);
+            }
+        }
+    }
+
+    return b;
 }
 
 KS_API ks_no_ret ks_script_usertype_inherits_from(Ks_Script_Usertype_Builder builder, ks_str base_type_name)
@@ -889,30 +932,12 @@ KS_API ks_no_ret ks_script_usertype_end(Ks_Script_Usertype_Builder builder)
     auto* sctx = static_cast<KsScriptEngineCtx*>(b->ctx);
     lua_State* L = sctx->get_raw_state();
 
-    if (luaL_newmetatable(L, b->type_name.c_str()) == 0) {
-    }
+    if (luaL_newmetatable(L, b->type_name.c_str()) == 0) {}
     int mt_idx = lua_gettop(L);
 
     lua_pushstring(L, "__ks_usertype_name");
     lua_pushstring(L, b->type_name.c_str());
     lua_settable(L, mt_idx);
-
-    if (b->destructor) {
-        lua_pushstring(L, "__gc");
-        lua_pushlightuserdata(L, (void*)b->destructor);
-        lua_pushcclosure(L, usertype_gc_thunk, 1);
-        lua_settable(L, mt_idx);
-    }
-
-    for (auto const& [mt, func] : b->metamethods) {
-        const char* mt_name = ks_metamethod_to_str(mt);
-        if (mt_name && func) {
-            lua_pushstring(L, mt_name);
-            lua_pushlightuserdata(L, (void*)func);
-            lua_pushcclosure(L, generic_cfunc_thunk, 1);
-            lua_settable(L, mt_idx);
-        }
-    }
 
     lua_newtable(L); int methods_tbl_idx = lua_gettop(L);
     lua_newtable(L); int getters_tbl_idx = lua_gettop(L);
@@ -928,86 +953,164 @@ KS_API ks_no_ret ks_script_usertype_end(Ks_Script_Usertype_Builder builder)
     save_usertype_table(L, getters_tbl_idx, b->type_name, "_getters");
     save_usertype_table(L, setters_tbl_idx, b->type_name, "_setters");
 
-    register_methods_to_table(L, methods_tbl_idx, b->methods, DISPATCH_METHOD);
+    if (b->destructor) {
+        lua_pushstring(L, "__gc");
+        lua_pushlightuserdata(L, (void*)b->destructor);
+        lua_pushcclosure(L, usertype_gc_thunk, 1);
+        lua_settable(L, mt_idx);
+    }
+    else if (b->reflected_destructor) {
+        lua_pushstring(L, "__gc");
+        lua_pushlightuserdata(L, (void*)b->reflected_destructor);
+        lua_pushcclosure(L, reflection_method_thunk, 1);
+        lua_settable(L, mt_idx);
+    }
+
+    for (auto const& [mt, func] : b->metamethods) {
+        const char* mt_name = ks_metamethod_to_str(mt);
+        if (mt_name && func) {
+            lua_pushstring(L, mt_name);
+            lua_pushlightuserdata(L, (void*)func);
+            lua_pushcclosure(L, generic_cfunc_thunk, 1);
+            lua_settable(L, mt_idx);
+        }
+    }
+
+    std::map<std::string, std::vector<DispatcherCandidate>> unified_methods;
+    std::map<std::string, std::vector<DispatcherCandidate>> unified_statics;
+    std::vector<DispatcherCandidate> unified_constructors;
+
+    for (auto const& [name, manual_vec] : b->methods) {
+        for (const auto& m : manual_vec) {
+            DispatcherCandidate c; c.func = m.func; c.signature = m.signature;
+            unified_methods[name].push_back(c);
+        }
+    }
+    for (auto const& [name, manual_vec] : b->static_methods) {
+        for (const auto& m : manual_vec) {
+            DispatcherCandidate c; c.func = m.func; c.signature = m.signature;
+            unified_statics[name].push_back(c);
+        }
+    }
+    for (const auto& ctor : b->constructors) {
+        DispatcherCandidate c; c.func = ctor.func; c.signature = ctor.signature;
+        unified_constructors.push_back(c);
+    }
+
+    std::string auto_mt_suffix = "_" + b->type_name;
+
+    auto process_reflection_entry = [&](const Ks_VTable_Entry* entry, bool is_static) {
+        std::string name = entry->name;
+        bool is_metamethod = false;
+        std::string mt_target_name;
+
+        if (name.rfind("__", 0) == 0) {
+            if (name.length() > auto_mt_suffix.length() &&
+                name.compare(name.length() - auto_mt_suffix.length(), auto_mt_suffix.length(), auto_mt_suffix) == 0) {
+
+                mt_target_name = name.substr(0, name.length() - auto_mt_suffix.length());
+                is_metamethod = true;
+            }
+            else {
+                mt_target_name = name;
+                is_metamethod = true;
+            }
+        }
+
+        if (is_metamethod) {
+            if (is_script_aware_signature(entry)) {
+                lua_pushstring(L, mt_target_name.c_str());
+                lua_pushlightuserdata(L, entry->func_ptr);
+                lua_pushcclosure(L, generic_cfunc_thunk, 1);
+                lua_settable(L, mt_idx);
+            }
+            else {
+                lua_pushstring(L, mt_target_name.c_str());
+                lua_pushlightuserdata(L, (void*)entry);
+                lua_pushcclosure(L, reflection_method_thunk, 1);
+                lua_settable(L, mt_idx);
+            }
+        }
+        else {
+            DispatcherCandidate c; c.entry = entry; c.signature = extract_signature(entry);
+            if (is_static) unified_statics[name].push_back(c);
+            else unified_methods[name].push_back(c);
+        }
+        };
+
+    for (const auto* entry : b->reflected_methods) {
+        process_reflection_entry(entry, false);
+    }
+
+    for (const auto* entry : b->reflected_static_methods) {
+        process_reflection_entry(entry, true);
+    }
+
+    for (const auto* entry : b->reflected_constructors) {
+        DispatcherCandidate c; c.entry = entry; c.signature = extract_signature(entry);
+        unified_constructors.push_back(c);
+    }
+
+    for (auto const& [name, candidates] : unified_methods) {
+        lua_pushstring(L, name.c_str());
+        push_overload_dispatcher(L, candidates, DISPATCH_METHOD, 0, nullptr, 0);
+        lua_settable(L, methods_tbl_idx);
+    }
 
     for (auto& p : b->properties) {
         if (p.getter) {
-            lua_pushstring(L, p.name.c_str());
-            lua_pushlightuserdata(L, (void*)p.getter);
-            lua_pushcclosure(L, instance_method_thunk, 1);
-            lua_settable(L, getters_tbl_idx);
+            lua_pushstring(L, p.name.c_str()); lua_pushlightuserdata(L, (void*)p.getter);
+            lua_pushcclosure(L, instance_method_thunk, 1); lua_settable(L, getters_tbl_idx);
         }
         if (p.setter) {
-            lua_pushstring(L, p.name.c_str());
-            lua_pushlightuserdata(L, (void*)p.setter);
-            lua_pushcclosure(L, instance_method_thunk, 1);
-            lua_settable(L, setters_tbl_idx);
+            lua_pushstring(L, p.name.c_str()); lua_pushlightuserdata(L, (void*)p.setter);
+            lua_pushcclosure(L, instance_method_thunk, 1); lua_settable(L, setters_tbl_idx);
         }
     }
-
     for (auto& field : b->fields) {
-        lua_pushstring(L, field.name.c_str());
-        lua_pushinteger(L, (int)field.offset);
-        lua_pushinteger(L, (int)field.type);
-        lua_pushstring(L, field.type_name.c_str());
-        lua_pushcclosure(L, usertype_field_getter_thunk, 3);
-        lua_settable(L, getters_tbl_idx);
+        lua_pushstring(L, field.name.c_str()); lua_pushinteger(L, (int)field.offset);
+        lua_pushinteger(L, (int)field.type); lua_pushstring(L, field.type_name.c_str());
+        lua_pushcclosure(L, usertype_field_getter_thunk, 3); lua_settable(L, getters_tbl_idx);
 
-        lua_pushstring(L, field.name.c_str());
-        lua_pushinteger(L, (int)field.offset);
-        lua_pushinteger(L, (int)field.type);
-        lua_pushstring(L, field.type_name.c_str());
-        lua_pushcclosure(L, usertype_field_setter_thunk, 3);
-        lua_settable(L, setters_tbl_idx);
+        lua_pushstring(L, field.name.c_str()); lua_pushinteger(L, (int)field.offset);
+        lua_pushinteger(L, (int)field.type); lua_pushstring(L, field.type_name.c_str());
+        lua_pushcclosure(L, usertype_field_setter_thunk, 3); lua_settable(L, setters_tbl_idx);
     }
 
-    bool has_custom_index = (b->metamethods.find(KS_SCRIPT_MT_INDEX) != b->metamethods.end());
-    bool has_custom_newindex = (b->metamethods.find(KS_SCRIPT_MT_NEWINDEX) != b->metamethods.end());
+    lua_pushstring(L, "__index"); lua_rawget(L, mt_idx);
+    bool has_index = !lua_isnil(L, -1); lua_pop(L, 1);
 
-    if (!has_custom_index) {
-        lua_pushstring(L, "__index");
-        lua_pushvalue(L, methods_tbl_idx);
-        lua_pushvalue(L, getters_tbl_idx);
-        lua_pushcclosure(L, usertype_index_thunk, 2);
+    lua_pushstring(L, "__newindex"); lua_rawget(L, mt_idx);
+    bool has_newindex = !lua_isnil(L, -1); lua_pop(L, 1);
+
+    if (!has_index) {
+        lua_pushstring(L, "__index"); lua_pushvalue(L, methods_tbl_idx);
+        lua_pushvalue(L, getters_tbl_idx); lua_pushcclosure(L, usertype_index_thunk, 2);
         lua_settable(L, mt_idx);
     }
-
-    if (!has_custom_newindex) {
-        lua_pushstring(L, "__newindex");
-        lua_pushvalue(L, setters_tbl_idx);
-        lua_pushcclosure(L, usertype_newindex_thunk, 1);
-        lua_settable(L, mt_idx);
+    if (!has_newindex) {
+        lua_pushstring(L, "__newindex"); lua_pushvalue(L, setters_tbl_idx);
+        lua_pushcclosure(L, usertype_newindex_thunk, 1); lua_settable(L, mt_idx);
     }
 
     lua_newtable(L); int class_tbl_idx = lua_gettop(L);
 
-    register_methods_to_table(L, class_tbl_idx, b->static_methods, DISPATCH_NORMAL);
+    for (auto const& [name, candidates] : unified_statics) {
+        lua_pushstring(L, name.c_str());
+        push_overload_dispatcher(L, candidates, DISPATCH_NORMAL, 0, nullptr, 0);
+        lua_settable(L, class_tbl_idx);
+    }
 
-    if (!b->constructors.empty()) {
-        lua_newtable(L);
-        lua_pushstring(L, "__call");
-
-        if (b->constructors.size() == 1 && b->constructors[0].signature.empty()) {
-            lua_pushlightuserdata(L, (void*)b->constructors[0].func);
-            lua_pushinteger(L, (lua_Integer)b->instance_size);
-            lua_pushstring(L, b->type_name.c_str());
-            lua_pushcclosure(L, usertype_auto_constructor_thunk, 3);
-        }
-        else {
-            push_overload_dispatcher(L, b->constructors, DISPATCH_CONSTRUCTOR, b->instance_size, b->type_name.c_str());
-        }
-
-        lua_settable(L, -3);
-        lua_setmetatable(L, class_tbl_idx);
+    if (!unified_constructors.empty()) {
+        lua_newtable(L); lua_pushstring(L, "__call");
+        push_overload_dispatcher(L, unified_constructors, DISPATCH_CONSTRUCTOR, b->instance_size, b->type_name.c_str(), 0);
+        lua_settable(L, -3); lua_setmetatable(L, class_tbl_idx);
     }
 
     lua_setglobal(L, b->type_name.c_str());
-
     lua_pop(L, 4);
 
-    UsertypeInfo info;
-    info.name = b->type_name;
-    info.size = b->instance_size;
+    UsertypeInfo info; info.name = b->type_name; info.size = b->instance_size;
     sctx->register_usertype_info(b->type_name, info);
 
     b->~KsUsertypeBuilder();
@@ -1106,7 +1209,7 @@ KS_API ks_no_ret ks_script_stack_push_boolean(Ks_Script_Ctx ctx, ks_bool val)
     lua_pushboolean(L, val);
 }
 
-KS_API ks_no_ret ks_script_stack_push_string(Ks_Script_Ctx ctx, ks_str val)
+KS_API ks_no_ret ks_script_stack_push_cstring(Ks_Script_Ctx ctx, ks_str val)
 {
     if (!ctx) return;
 
@@ -1430,7 +1533,7 @@ KS_API Ks_Script_Object ks_script_require(Ks_Script_Ctx ctx, ks_str module_name)
 
     Ks_Script_Object require = ks_script_get_global(ctx, "require");
     ks_script_stack_push_obj(ctx, require);
-    ks_script_stack_push_string(ctx, module_name);
+    ks_script_stack_push_cstring(ctx, module_name);
 
     if (lua_pcall(L, 1 ,1, 0) != LUA_OK) {
         const char* err = lua_tostring(L, -1);
@@ -2771,27 +2874,27 @@ static int instance_method_thunk(lua_State* L) {
 }
 
 static int overload_dispatcher_thunk(lua_State* L) {
+
     int overloads_tab_idx = lua_upvalueindex(1);
     int num_overloads = (int)lua_rawlen(L, overloads_tab_idx);
     DispatchMode mode = (DispatchMode)lua_tointeger(L, lua_upvalueindex(2));
 
     bool is_auto_ctor = (mode == DISPATCH_CONSTRUCTOR);
     if (is_auto_ctor) {
+        lua_remove(L, 1);
+
         ks_size size = (ks_size)lua_tointeger(L, lua_upvalueindex(3));
-        lua_remove(L, 1); 
-        if (size > 0) {
-            const char* tname = lua_tostring(L, lua_upvalueindex(4));
+        const char* tname = lua_tostring(L, lua_upvalueindex(4));
 
-            size_t total_size = sizeof(KsUsertypeInstanceHandle) + size;
-            void* raw_mem = lua_newuserdatauv(L, total_size, 0);
+        size_t total_size = sizeof(KsUsertypeInstanceHandle) + size;
+        void* raw_mem = lua_newuserdatauv(L, total_size, 0);
+        auto* handle = new(raw_mem) KsUsertypeInstanceHandle();
+        handle->instance = static_cast<ks_byte*>(raw_mem) + sizeof(KsUsertypeInstanceHandle);
+        handle->size = size;
+        handle->is_borrowed = false;
 
-            auto* handle = new(raw_mem) KsUsertypeInstanceHandle();
-            handle->instance = static_cast<ks_byte*>(raw_mem) + sizeof(KsUsertypeInstanceHandle);
-            handle->size = size;
-            handle->is_borrowed = false;
-            luaL_setmetatable(L, tname);
-            lua_insert(L, 1);
-        }
+        luaL_setmetatable(L, tname);
+        lua_insert(L, 1);
     }
 
     int start_match_idx = (mode == DISPATCH_NORMAL) ? 1 : 2;
@@ -2801,40 +2904,67 @@ static int overload_dispatcher_thunk(lua_State* L) {
 
     for (int i = 1; i <= num_overloads; ++i) {
         lua_rawgeti(L, overloads_tab_idx, i);
+
         lua_getfield(L, -1, "sig");
         int sig_tbl_idx = lua_gettop(L);
+        bool match = check_signature_match(L, sig_tbl_idx, start_match_idx, actual_args_count);
+        lua_pop(L, 1); 
 
-        if (check_signature_match(L, sig_tbl_idx, start_match_idx, actual_args_count)) {
-
-            lua_getfield(L, -2, "func");
-            auto func = reinterpret_cast<ks_script_cfunc>(lua_touserdata(L, -1));
-            lua_settop(L, original_top);
-
-            lua_pushlightuserdata(L, (void*)&KS_CTX_REGISTRY_KEY);
-            lua_gettable(L, LUA_REGISTRYINDEX);
-            auto* ctx = static_cast<KsScriptEngineCtx*>(lua_touserdata(L, -1));
+        if (match) {
+            lua_getfield(L, -1, "type");
+            int call_type = (int)lua_tointeger(L, -1);
             lua_pop(L, 1);
 
-            if (ctx && func) {
-                int arg_offset = (mode == DISPATCH_NORMAL) ? 0 : 1;
-                AutoCallFrame frame(ctx, arg_offset, 4);
+            if (call_type == 0) {
+                lua_getfield(L, -1, "func");
+                auto func = reinterpret_cast<ks_script_cfunc>(lua_touserdata(L, -1));
+                lua_pop(L, 2);
 
-                int n_res = func(static_cast<Ks_Script_Ctx>(ctx));
+                lua_pushlightuserdata(L, (void*)&KS_CTX_REGISTRY_KEY);
+                lua_gettable(L, LUA_REGISTRYINDEX);
+                auto* ctx = static_cast<KsScriptEngineCtx*>(lua_touserdata(L, -1));
+                lua_pop(L, 1);
+
+                if (ctx && func) {
+                    int arg_offset = (mode == DISPATCH_NORMAL) ? 0 : 1;
+
+                    AutoCallFrame frame(ctx, arg_offset, 4);
+
+                    int n_res = func(static_cast<Ks_Script_Ctx>(ctx));
+
+                    if (is_auto_ctor) { lua_settop(L, 1); return 1; }
+                    return n_res;
+                }
+            }
+            else {
+                lua_getfield(L, -1, "entry");
+                auto* entry = (const Ks_VTable_Entry*)lua_touserdata(L, -1);
+                lua_pop(L, 2);
+
+                void* self_ptr = nullptr;
+                if (mode == DISPATCH_METHOD || mode == DISPATCH_CONSTRUCTOR) {
+                    auto* h = (KsUsertypeInstanceHandle*)lua_touserdata(L, 1);
+                    if (h) self_ptr = h->instance;
+                }
+
+                int n_res = perform_ffi_call(L, entry, self_ptr, start_match_idx);
+
                 if (is_auto_ctor) { lua_settop(L, 1); return 1; }
                 return n_res;
             }
-            return luaL_error(L, "Dispatch Internal Error");
         }
-        lua_pop(L, 2);
+        lua_pop(L, 1); 
     }
+
     return luaL_error(L, "No matching overload found.");
 }
 
-static void push_overload_dispatcher(lua_State* L, const std::vector<MethodInfo>& overloads, DispatchMode mode, ks_size instance_size, const char* type_name, ks_size n_user_upvalues) {
+static void push_overload_dispatcher(lua_State* L, const std::vector<DispatcherCandidate>& overloads, DispatchMode mode, ks_size instance_size, const char* type_name, ks_size n_user_upvalues) {
     lua_createtable(L, (int)overloads.size(), 0);
+
     for (size_t i = 0; i < overloads.size(); ++i) {
-        lua_createtable(L, 0, 2);
-        lua_pushstring(L, "func"); lua_pushlightuserdata(L, (void*)overloads[i].func); lua_settable(L, -3);
+        lua_createtable(L, 0, 3);
+
         lua_pushstring(L, "sig");
         lua_createtable(L, (int)overloads[i].signature.size(), 0);
         for (size_t j = 0; j < overloads[i].signature.size(); ++j) {
@@ -2842,24 +2972,40 @@ static void push_overload_dispatcher(lua_State* L, const std::vector<MethodInfo>
             lua_rawseti(L, -2, (int)(j + 1));
         }
         lua_settable(L, -3);
+
+        lua_pushstring(L, "type");
+        if (overloads[i].entry) {
+            lua_pushinteger(L, 1);
+            lua_settable(L, -3);
+            lua_pushstring(L, "entry");
+            lua_pushlightuserdata(L, (void*)overloads[i].entry);
+            lua_settable(L, -3);
+        }
+        else {
+            lua_pushinteger(L, 0);
+            lua_settable(L, -3);
+            lua_pushstring(L, "func");
+            lua_pushlightuserdata(L, (void*)overloads[i].func);
+            lua_settable(L, -3);
+        }
         lua_rawseti(L, -2, (int)(i + 1));
     }
 
+    lua_pushvalue(L, -1);
     lua_pushinteger(L, (int)mode);
     lua_pushinteger(L, (lua_Integer)instance_size);
     if (type_name) lua_pushstring(L, type_name); else lua_pushnil(L);
 
     if (n_user_upvalues > 0) {
-        int current_top = lua_gettop(L);
-        int first_user_abs_idx = current_top - 4 - (int)n_user_upvalues + 1;
-
         for (ks_size k = 0; k < n_user_upvalues; ++k) {
-            lua_pushvalue(L, first_user_abs_idx);
-            lua_remove(L, first_user_abs_idx);
+            int idx_to_move = lua_gettop(L) - 5 - (int)n_user_upvalues + 1;
+            lua_pushvalue(L, idx_to_move);
+            lua_remove(L, idx_to_move);
         }
     }
 
     lua_pushcclosure(L, overload_dispatcher_thunk, 4 + (int)n_user_upvalues);
+    lua_remove(L, -2);
 }
 
 static bool check_signature_match(lua_State* L, int sig_tbl_idx, int start_idx, int args_to_check) {
@@ -2936,7 +3082,18 @@ static void register_methods_to_table(lua_State* L, int table_idx, const std::ma
             }
         }
         else {
-            push_overload_dispatcher(L, overloads, mode);
+
+            std::vector<DispatcherCandidate> candidates;
+            candidates.reserve(overloads.size());
+
+            for (const auto& info : overloads) {
+                DispatcherCandidate c;
+                c.func = info.func;
+                c.signature = info.signature;
+                candidates.push_back(c);
+            }
+
+            push_overload_dispatcher(L, candidates, mode);
         }
         lua_settable(L, table_idx);
     }
@@ -3007,7 +3164,7 @@ static void add_reflected_property(Ks_Script_Usertype_Builder builder, const Ks_
     }
 
 
-    ks_script_usertype_add_field(builder, field->name, field->type, field->offset, nullptr);
+    ks_script_usertype_add_field(builder, field->name, field->type, field->offset, field->type_str);
 }
 
 static int usertype_field_setter_thunk(lua_State* L) {
@@ -3059,4 +3216,181 @@ static std::vector<MethodInfo> convert_sigs(const Ks_Script_Sig_Def* sigs, size_
 
 static int enum_newindex_error(lua_State* L) {
     return luaL_error(L, "Attempt to modify a read-only enum table");
+}
+
+static ffi_type* ks_type_to_ffi(Ks_Type type) {
+    switch (type) {
+    case KS_TYPE_VOID: return &ffi_type_void;
+    case KS_TYPE_INT:  return &ffi_type_sint32;
+    case KS_TYPE_UINT: return &ffi_type_uint32;
+    case KS_TYPE_FLOAT: return &ffi_type_float;
+    case KS_TYPE_DOUBLE: return &ffi_type_double;
+    case KS_TYPE_BOOL: return &ffi_type_uint8;
+    case KS_TYPE_USERDATA: return &ffi_type_pointer;
+    case KS_TYPE_CSTRING: return &ffi_type_pointer;
+    case KS_TYPE_CHAR: return &ffi_type_sint8;
+    default: return &ffi_type_pointer;
+    }
+}
+
+static int reflection_method_thunk(lua_State* L) {
+    const Ks_VTable_Entry* entry = (const Ks_VTable_Entry*)lua_touserdata(L, lua_upvalueindex(1));
+
+    void* self_ptr = nullptr;
+    int lua_arg_start = 1;
+
+    if (entry->kind == KS_FUNC_METHOD || entry->kind == KS_FUNC_DESTRUCTOR) {
+        KsUsertypeInstanceHandle* h = (KsUsertypeInstanceHandle*)lua_touserdata(L, 1);
+        if (!h || !h->instance) return luaL_error(L, "Invalid self");
+        self_ptr = h->instance;
+        lua_arg_start = 2;
+    }
+
+    return perform_ffi_call(L, entry, self_ptr, lua_arg_start);
+}
+
+static int reflection_constructor_thunk(lua_State* L) {
+    lua_remove(L, 1);
+
+    const Ks_VTable_Entry* entry = (const Ks_VTable_Entry*)lua_touserdata(L, lua_upvalueindex(1));
+    ks_size size = (ks_size)lua_tointeger(L, lua_upvalueindex(2));
+    const char* type_name = lua_tostring(L, lua_upvalueindex(3));
+
+    size_t total_size = sizeof(KsUsertypeInstanceHandle) + size;
+    void* raw_mem = lua_newuserdatauv(L, total_size, 0);
+    auto* handle = new(raw_mem) KsUsertypeInstanceHandle();
+    handle->instance = static_cast<ks_byte*>(raw_mem) + sizeof(KsUsertypeInstanceHandle);
+    handle->size = size;
+    handle->is_borrowed = false;
+
+    luaL_setmetatable(L, type_name);
+    lua_insert(L, 1);
+
+    perform_ffi_call(L, entry, handle->instance, 2);
+
+    lua_settop(L, 1);
+    return 1;
+}
+
+static std::string generate_signature(const Ks_VTable_Entry* entry) {
+    std::string sig = "";
+    for (size_t i = 0; i < entry->arg_count; ++i) {
+        switch (entry->args[i].type) {
+        case KS_TYPE_INT: sig += "i"; break;
+        case KS_TYPE_FLOAT: sig += "f"; break;
+        case KS_TYPE_BOOL: sig += "b"; break;
+        case KS_TYPE_CSTRING: sig += "s"; break;
+        case KS_TYPE_USERDATA: sig += "u"; break;
+        default: sig += "?"; break;
+        }
+    }
+    return sig;
+}
+
+static int perform_ffi_call(lua_State* L, const Ks_VTable_Entry* entry, void* self_ptr, int lua_arg_start) {
+    bool has_self_arg = (entry->kind != KS_FUNC_STATIC);
+    size_t total_c_args = entry->arg_count + (has_self_arg ? 1 : 0);
+
+    ffi_type** types = (ffi_type**)alloca(total_c_args * sizeof(ffi_type*));
+    void** values = (void**)alloca(total_c_args * sizeof(void*));
+    FFIArgValue* val_store = (FFIArgValue*)alloca(total_c_args * sizeof(FFIArgValue));
+
+    int c_idx = 0;
+
+    if (has_self_arg) {
+        types[c_idx] = &ffi_type_pointer;
+        val_store[c_idx].p = self_ptr;
+        values[c_idx] = &val_store[c_idx].p;
+        c_idx++;
+    }
+
+    for (size_t i = 0; i < entry->arg_count; ++i) {
+        Ks_Type t = entry->args[i].type;
+        int stack_idx = lua_arg_start + (int)i;
+        types[c_idx] = ks_type_to_ffi(t);
+
+        switch (t) {
+        case KS_TYPE_INT:
+            val_store[c_idx].i = (int)luaL_checkinteger(L, stack_idx);
+            values[c_idx] = &val_store[c_idx].i; break;
+        case KS_TYPE_FLOAT:
+            val_store[c_idx].f = (float)luaL_checknumber(L, stack_idx);
+            values[c_idx] = &val_store[c_idx].f; break;
+        case KS_TYPE_BOOL:
+            val_store[c_idx].b = (uint8_t)lua_toboolean(L, stack_idx);
+            values[c_idx] = &val_store[c_idx].b; break;
+        case KS_TYPE_CSTRING:
+            val_store[c_idx].p = (void*)luaL_checkstring(L, stack_idx);
+            values[c_idx] = &val_store[c_idx].p; break;
+        case KS_TYPE_USERDATA: {
+            void* ud = lua_touserdata(L, stack_idx);
+            auto* h = (KsUsertypeInstanceHandle*)ud;
+            val_store[c_idx].p = h ? h->instance : nullptr;
+            values[c_idx] = &val_store[c_idx].p;
+            break;
+        }
+        default:
+            val_store[c_idx].p = lua_touserdata(L, stack_idx);
+            values[c_idx] = &val_store[c_idx].p; break;
+        }
+        c_idx++;
+    }
+
+    ffi_cif cif;
+    ffi_type* rtype = ks_type_to_ffi(entry->return_type);
+    if (ffi_prep_cif(&cif, FFI_DEFAULT_ABI, (unsigned int)total_c_args, rtype, types) != FFI_OK) {
+        return luaL_error(L, "FFI Prep Failed for %s", entry->name ? entry->name : "ctor");
+    }
+
+    unsigned char ret_buf[16];
+    ffi_call(&cif, FFI_FN(entry->func_ptr), ret_buf, values);
+
+    if (entry->return_type == KS_TYPE_VOID) return 0;
+    if (entry->return_type == KS_TYPE_INT) { lua_pushinteger(L, *(int*)ret_buf); return 1; }
+    if (entry->return_type == KS_TYPE_FLOAT) { lua_pushnumber(L, *(float*)ret_buf); return 1; }
+    if (entry->return_type == KS_TYPE_BOOL) { lua_pushboolean(L, *(uint8_t*)ret_buf); return 1; }
+    if (entry->return_type == KS_TYPE_CSTRING) {
+        const char* s = *(const char**)ret_buf;
+        if (s) lua_pushstring(L, s); else lua_pushnil(L);
+        return 1;
+    }
+
+    return 0;
+}
+
+static std::vector<Ks_Type> extract_signature(const Ks_VTable_Entry* entry) {
+    std::vector<Ks_Type> sig;
+    if (!entry) return sig;
+    sig.reserve(entry->arg_count);
+    for (size_t i = 0; i < entry->arg_count; ++i) {
+        sig.push_back(entry->args[i].type);
+    }
+    return sig;
+}
+
+static std::vector<Ks_Type> parse_signature_string(const std::string& sig) {
+    std::vector<Ks_Type> types;
+    for (char c : sig) {
+        switch (c) {
+        case 'v': types.push_back(KS_TYPE_VOID); break;
+        case 'i': types.push_back(KS_TYPE_INT); break;
+        case 'f': types.push_back(KS_TYPE_FLOAT); break;
+        case 'b': types.push_back(KS_TYPE_BOOL); break;
+        case 's': types.push_back(KS_TYPE_CSTRING); break;
+        case 'u': types.push_back(KS_TYPE_USERDATA); break;
+        case 'a': types.push_back(KS_TYPE_UNKNOWN); break;
+        default: break;
+        }
+    }
+    return types;
+}
+
+static bool is_script_aware_signature(const Ks_VTable_Entry* entry) {
+    if (entry->return_type != KS_TYPE_INT) return false;
+
+    if (entry->arg_count != 1) return false;
+
+    if (entry->args[0].type != KS_TYPE_USERDATA && entry->args[0].type != KS_TYPE_UNKNOWN) return false;
+
+    return true;
 }

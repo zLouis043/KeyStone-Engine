@@ -254,7 +254,7 @@ static ks_returns_count l_serializer_dump_string(Ks_Script_Ctx ctx) {
     auto* self = (SerializerUserData*)ks_script_get_self(ctx);
 
     ks_str res = ks_serializer_dump_to_string(self->handle);
-    ks_script_stack_push_string(ctx, res);
+    ks_script_stack_push_cstring(ctx, res);
     return 1;
 }
 
@@ -333,7 +333,7 @@ static ks_returns_count l_json_as_number(Ks_Script_Ctx ctx) {
 static ks_returns_count l_json_as_string(Ks_Script_Ctx ctx) {
     auto* self = (JsonUserData*)ks_script_get_self(ctx);
     if (!self->handle) return 0;
-    ks_script_stack_push_string(ctx, ks_json_get_string(self->handle));
+    ks_script_stack_push_cstring(ctx, ks_json_get_string(self->handle));
     return 1;
 }
 

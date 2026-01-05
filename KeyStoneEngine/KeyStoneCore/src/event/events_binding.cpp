@@ -177,7 +177,7 @@ ks_bool lua_subscriber_thunk(Ks_Event_Payload data, Ks_Payload user_data) {
             ks_script_stack_push_boolean(ctx, ks_event_get_bool(data, i));
             break;
         case KS_TYPE_CSTRING:
-            ks_script_stack_push_string(ctx, ks_event_get_cstring(data, i));
+            ks_script_stack_push_cstring(ctx, ks_event_get_cstring(data, i));
             break;
         case KS_TYPE_SCRIPT_TABLE:
             ks_script_stack_push_obj(ctx, ks_event_get_script_table(data, i));
