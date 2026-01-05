@@ -26,7 +26,7 @@ TEST_CASE("Performance Benchmarks") {
 
     SUBCASE("Benchmark: Lua -> C++ Call Overhead (100k calls)") {
         const char* script = R"(
-            local h = events.register("PerfEvent", {type.INT})
+            local h = events.register("PerfEvent", {types.INT})
             
             local sub = events.subscribe(h, function(v) end) 
             
