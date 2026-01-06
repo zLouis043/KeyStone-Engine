@@ -2037,6 +2037,11 @@ KS_API ks_str ks_script_obj_as_cstring(Ks_Script_Ctx ctx, Ks_Script_Object obj)
     const char* lua_str = lua_tolstring(L, -1, &len);
 
     char* copy = (char*)ks_alloc_debug(len + 1, KS_LT_FRAME, KS_TAG_SCRIPT, "StringCopy");
+    if (!copy) {
+        KS_LOG_ERROR("[Script] Frame Allocator OOM converting string!");
+        lua_pop(L, 1);
+        return nullptr;
+    }
     memcpy(copy, lua_str, len + 1);
 
     lua_pop(L, 1);
@@ -2044,7 +2049,20 @@ KS_API ks_str ks_script_obj_as_cstring(Ks_Script_Ctx ctx, Ks_Script_Object obj)
     return copy;
 }
 
-KS_API Ks_UserData ks_script_obj_as_userdata(Ks_Script_Ctx ctx, Ks_Script_Object obj)
+KS_API const char* ks_script_obj_as_string_view(Ks_Script_Ctx ctx, Ks_Script_Object obj)
+{
+    if (obj.type != KS_TYPE_CSTRING) return nullptr;
+
+    auto* sctx = static_cast<KsScriptEngineCtx*>(ctx);
+    lua_State* L = sctx->get_raw_state();
+
+    sctx->get_from_registry(obj.val.string_ref);
+    const char* ptr = lua_tostring(L, -1);
+    lua_pop(L, 1);
+
+    return ptr;
+}
+Ks_UserData ks_script_obj_as_userdata(Ks_Script_Ctx ctx, Ks_Script_Object obj)
 {
     Ks_UserData data;
     data.data = nullptr;

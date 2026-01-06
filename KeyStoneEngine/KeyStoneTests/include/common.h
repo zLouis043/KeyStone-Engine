@@ -240,11 +240,3 @@ inline void RegisterCommonReflection() {
         ks_reflect_vtable_end()
     );
 }
-
-static int g_event_int = 0;
-static std::string g_event_str = "";
-static int g_event_calls = 0;
-
-inline void ResetTestGlobals() {
-    g_event_int = 0; g_event_str = ""; g_event_calls = 0;
-}

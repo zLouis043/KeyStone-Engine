@@ -18,6 +18,7 @@ ks_returns_count vec3_ctor_bench(Ks_Script_Ctx ctx) {
 
 TEST_CASE("Performance Benchmarks") {
     ks_memory_init();
+    ks_reflection_init();
     Ks_Script_Ctx ctx = ks_script_create_ctx();
     Ks_EventManager em = ks_event_manager_create();
     ks_event_manager_lua_bind(em, ctx);
@@ -26,21 +27,24 @@ TEST_CASE("Performance Benchmarks") {
 
     SUBCASE("Benchmark: Lua -> C++ Call Overhead (100k calls)") {
         const char* script = R"(
-            local h = events.register("PerfEvent", {types.INT})
+            local evt_name = "PerfEvent"
+            local evt_handle = events.register(evt_name, {types.INT})
             
-            local sub = events.subscribe(h, function(v) end) 
+            local sub = events.subscribe(evt_handle, function(v) end)
             
             local start = os.clock()
             for i=1, 100000 do
-                events.publish(h, i)
+                events.publish(evt_handle, i)
             end
         )";
 
         long long duration = measure_ms([&]() {
-            ks_script_do_cstring(ctx, script);
-            });
+            Ks_Script_Function_Call_Result res = ks_script_do_cstring(ctx, script);
+            if (!ks_script_call_succeded(ctx, res)) {
+                FAIL(ks_script_get_last_error_str(ctx));
+            }
+        });
 
-        //WARN(duration < 500);
         KS_LOG_TRACE("[PERF] 100k Event Publishes (Lua->C++->Lua): %lld ms", duration);
     }
 
@@ -65,5 +69,6 @@ TEST_CASE("Performance Benchmarks") {
 
     ks_event_manager_destroy(em);
     ks_script_destroy_ctx(ctx);
+    ks_reflection_shutdown();
     ks_memory_shutdown();
 }

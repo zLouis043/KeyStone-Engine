@@ -37,7 +37,6 @@ struct ScriptEnv_Impl {
     ~ScriptEnv_Impl() {
         if (script_ctx) {
             ks_job_manager_destroy(job_mgr);
-            ks_event_manager_lua_shutdown(event_mgr);
             ks_time_manager_binding_shutdown(time_mgr);
             ks_script_destroy_ctx(script_ctx);
         }

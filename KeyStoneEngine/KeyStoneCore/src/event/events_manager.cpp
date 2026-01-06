@@ -1,376 +1,230 @@
 #include "../../include/event/events_manager.h"
-#include "../../include/event/events_binding.h"
+#include "../../include/core/reflection.h"
+#include "../../include/core/handle.h"
 #include "../../include/core/log.h"
+#include "../../include/profiler/profiler.h"
 #include "../../include/memory/memory.h"
-
-#include <string>
 #include <vector>
 #include <unordered_map>
+#include <string>
+#include <shared_mutex>
 #include <mutex>
-#include <algorithm>
-#include <string.h>
 
-struct EventArgument {
-    Ks_Type type;
-    union {
-        ks_bool b_val;
-        ks_char c_val;
-        ks_int i_val;
-        ks_uint16 ui_val;
-        ks_float f_val;
-        ks_double d_val;
-        ks_ptr p_val;
-        Ks_Script_Table t_val;
+#define KS_HANDLE_INDEX_MASK 0x00FFFFFF
 
-    };
-    std::vector<uint8_t> buffer;
+struct EventSubscriber {
+    Ks_Handle sub_id;
+    Ks_EventCallback callback;
+    void* user_data;
+    Ks_UserDataFreeCallback free_cb;
 };
 
-struct PayloadInternal {
-    std::vector<EventArgument> args;
-    ks_ptr script_ctx;
-};
-
-struct EventDefinition {
+struct EventTypeData {
     std::string name;
-    std::vector<Ks_Type> signature;
+    const Ks_Type_Info* type_info;
+    std::vector<EventSubscriber> subscribers;
 };
 
-struct Subscriber {
-    Ks_Handle sub_handle;
-    ks_event_callback callback;
-    Ks_Payload payload;
+struct Ks_EventManager_Impl {
+    std::mutex mutex;
+    std::vector<EventTypeData*> event_types;
+    std::unordered_map<std::string, uint32_t> name_to_id;
+    std::unordered_map<Ks_Handle, uint32_t> sub_to_event_idx;
+    Ks_Handle_Id h_type_event_def;
+    Ks_Handle_Id h_type_sub;
 };
 
-class EventManager_Impl {
-public:
-    EventManager_Impl() {
-        event_type_id = ks_handle_register("Event");
-        sub_type_id = ks_handle_register("Subscription");
+static void ensure_signal_reflection() {
+    if (!ks_reflection_get_type("Ks_Signal")) {
+        ks_reflect_struct(Ks_Signal, ks_reflect_field(char, _unused));
+    }
+}
+
+static uint32_t get_index_from_handle(Ks_Handle h) {
+    return (h & KS_HANDLE_INDEX_MASK);
+}
+
+KS_API Ks_EventManager ks_event_manager_create() {
+    auto* impl = new Ks_EventManager_Impl();
+    impl->h_type_event_def = ks_handle_register("EventType");
+    impl->h_type_sub = ks_handle_register("EventSub");
+    ensure_signal_reflection();
+    impl->event_types.reserve(64);
+    return (Ks_EventManager)impl;
+}
+
+static void cleanup_subscriber(EventSubscriber& sub) {
+    if (sub.free_cb && sub.user_data) {
+        sub.free_cb(sub.user_data);
+        sub.user_data = nullptr;
+    }
+}
+
+KS_API void ks_event_manager_destroy(Ks_EventManager em) {
+    if (!em) return;
+    auto* impl = (Ks_EventManager_Impl*)em;
+
+    for (auto* type_data : impl->event_types) {
+        if (!type_data) continue;
+        for (auto& sub : type_data->subscribers) {
+            cleanup_subscriber(sub);
+        }
+        delete type_data;
+    }
+    delete impl;
+}
+
+KS_API Ks_Handle ks_event_manager_register_type(Ks_EventManager em, const char* type_name) {
+    auto* impl = (Ks_EventManager_Impl*)em;
+    if (!type_name) return KS_INVALID_HANDLE;
+
+    std::lock_guard<std::mutex> lock(impl->mutex);
+
+    auto it = impl->name_to_id.find(type_name);
+    if (it != impl->name_to_id.end()) {
+        return ((Ks_Handle)impl->h_type_event_def << 24) | (it->second & KS_HANDLE_INDEX_MASK);
     }
 
-    ~EventManager_Impl() {
-        definitions.clear();
-        for (auto subs : subscribers) {
-            for (auto sub : subs.second) {
-                if (sub.payload.owns_data && sub.payload.data) {
-                    if (sub.payload.free_fn) sub.payload.free_fn(sub.payload.data);
-                    else ks_dealloc(sub.payload.data);
-                }
-            }
-        }
-        subscribers.clear();
-        name_to_handle.clear();
+    const Ks_Type_Info* info = ks_reflection_get_type(type_name);
+    if (!info) {
+        KS_LOG_ERROR("Cannot register event '%s': Type not reflected", type_name);
+        return KS_INVALID_HANDLE;
     }
 
-    Ks_Handle register_event(const char* name, const Ks_Type* types, size_t count) {
-        std::lock_guard<std::mutex> lock(mtx);
-        std::string s_name = name;
+    Ks_Handle new_handle = ks_handle_make(impl->h_type_event_def);
+    if (new_handle == KS_INVALID_HANDLE) return KS_INVALID_HANDLE;
 
-        if (name_to_handle.find(s_name) != name_to_handle.end()) {
-            return name_to_handle[s_name];
-        }
+    uint32_t vector_idx = get_index_from_handle(new_handle);
 
-        Ks_Handle handle = ks_handle_make(event_type_id);
-        name_to_handle[s_name] = handle;
+    EventTypeData* data = new EventTypeData();
+    data->name = type_name;
+    data->type_info = info;
 
-        EventDefinition def;
-        def.name = s_name;
-        if (types && count > 0) {
-            def.signature.assign(types, types + count);
-        }
-        definitions[handle] = def;
-
-        return handle;
+    if (vector_idx >= impl->event_types.size()) {
+        impl->event_types.resize(vector_idx + 1, nullptr);
     }
+    impl->event_types[vector_idx] = data;
 
-    Ks_Handle get_handle(const char* name) {
-        std::lock_guard<std::mutex> lock(mtx);
-        auto it = name_to_handle.find(name);
-        if (it == name_to_handle.end()) return KS_INVALID_HANDLE;
-        return it->second;
+    impl->name_to_id[type_name] = vector_idx;
+
+    return new_handle;
+}
+
+KS_API Ks_Handle ks_event_manager_register_signal(Ks_EventManager em, const char* signal_name) {
+    ensure_signal_reflection();
+    ks_reflection_register_typedef("Ks_Signal", signal_name);
+    return ks_event_manager_register_type(em, signal_name);
+}
+
+KS_API Ks_Handle ks_event_manager_subscribe(Ks_EventManager em, Ks_Handle event_handle, Ks_EventCallback callback, void* user_data){
+    return ks_event_manager_subscribe_ex(em, event_handle, callback, user_data, nullptr);
+}
+
+KS_API Ks_Handle ks_event_manager_get_event_handle(Ks_EventManager em, ks_str name)
+{
+    auto* impl = (Ks_EventManager_Impl*)em;
+    std::lock_guard<std::mutex> lock(impl->mutex);
+
+    auto it = impl->name_to_id.find(name);
+    if (it != impl->name_to_id.end()) {
+        return ((Ks_Handle)impl->h_type_event_def << 24) | (it->second & KS_HANDLE_INDEX_MASK);
     }
+    return KS_INVALID_HANDLE;
+}
 
-    Ks_Handle subscribe(Ks_Handle evt, ks_event_callback cb, Ks_Payload user_data) {
-        std::lock_guard<std::mutex> lock(mtx);
-        if (definitions.find(evt) == definitions.end()) return KS_INVALID_HANDLE;
+const char* ks_event_manager_get_event_name(Ks_EventManager em, Ks_Handle event_handle)
+{
+    auto* impl = (Ks_EventManager_Impl*)em;
+    uint32_t idx = get_index_from_handle(event_handle);
 
-        Ks_Handle sub_h = ks_handle_make(sub_type_id);
-        subscribers[evt].push_back({ sub_h, cb, user_data });
-        return sub_h;
-    }
+    std::lock_guard<std::mutex> lock(impl->mutex);
 
-    void unsubscribe(Ks_Handle sub) {
-        std::lock_guard<std::mutex> lock(mtx);
-        for (auto& [evt, subs] : subscribers) {
-            auto it = std::remove_if(subs.begin(), subs.end(),
-                [sub](const Subscriber& s) { 
-                    if (s.sub_handle == sub) {
-                        if (s.payload.owns_data && s.payload.data) {
-                            if (s.payload.free_fn) s.payload.free_fn(s.payload.data);
-                            else ks_dealloc(s.payload.data);
-                        }
-                        return true;
-                    }
-                    return false;
-                });
-            if (it != subs.end()) {
-                subs.erase(it, subs.end());
-                return;
-            }
-        }
-    }
-
-    void dispatch_payload(Ks_Handle evt, PayloadInternal& payload) {
-        std::vector<Subscriber> subs_copy;
-        {
-            std::lock_guard<std::mutex> lock(mtx);
-            if (subscribers.find(evt) != subscribers.end()) {
-                subs_copy = subscribers[evt];
-            }
-        }
-        for (const auto& sub : subs_copy) {
-            sub.callback(&payload, sub.payload);
-        }
-    }
-
-    void publish_variadic(Ks_Handle evt, va_list args) {
-        if (!ks_handle_is_type(evt, event_type_id)) {
-            KS_LOG_ERROR("Invalid event handle passed to publish");
-            return;
-        }
-
-        std::vector<Ks_Type> signature;
-        std::vector<Subscriber> current_subs;
-
-        {
-            std::lock_guard<std::mutex> lock(mtx);
-            auto def_it = definitions.find(evt);
-            if (def_it == definitions.end()) return;
-            signature = def_it->second.signature;
-
-            auto sub_it = subscribers.find(evt);
-            if (sub_it != subscribers.end()) {
-                current_subs = sub_it->second;
-            }
-        }
-
-        if (current_subs.empty()) return;
-
-        PayloadInternal payload;
-        payload.script_ctx = nullptr;
-
-        for (Ks_Type type : signature) {
-            EventArgument arg;
-            arg.type = type;
-
-            switch (type) {
-            case KS_TYPE_BOOL:
-                arg.b_val = (ks_int)va_arg(args, ks_int);
-                break;
-            case KS_TYPE_CHAR:
-                arg.c_val = (ks_int)va_arg(args, ks_int);
-                break;
-            case KS_TYPE_INT:
-                arg.i_val = (ks_int)va_arg(args, ks_int);
-                break;
-            case KS_TYPE_UINT:
-                arg.ui_val = (ks_uint32)va_arg(args, ks_uint32);
-                break;
-            case KS_TYPE_FLOAT:
-                arg.f_val = (float)va_arg(args, ks_double);
-                break;
-            case KS_TYPE_DOUBLE:
-                arg.d_val = (ks_double)va_arg(args, ks_double);
-                break;
-            case KS_TYPE_CSTRING: {
-                ks_str s = (ks_str)va_arg(args, ks_str);
-                if (s) {
-                    size_t len = strlen(s) + 1;
-                    arg.buffer.resize(len);
-                    memcpy(arg.buffer.data(), s, len);
-                }
-            } break;
-            case KS_TYPE_PTR: {
-                ks_ptr p = (ks_ptr)va_arg(args, ks_ptr);
-                arg.p_val = p;
-            } break;
-            case KS_TYPE_USERDATA: {
-                Ks_UserData ud = (Ks_UserData)va_arg(args, Ks_UserData);
-                if (ud.data && ud.size > 0) {
-                    arg.buffer.resize(ud.size);
-                    memcpy(arg.buffer.data(), ud.data, ud.size);
-                }
-            } break;
-            case KS_TYPE_SCRIPT_TABLE: {
-                Ks_Script_Table tbl = va_arg(args, Ks_Script_Table);
-                arg.t_val = tbl;
-            } break;
-            default: break;
-            }
-            payload.args.push_back(arg);
-        }
-        
-        dispatch_payload(evt, payload);
-    }
-
-    void publish_direct(Ks_Handle evt, PayloadInternal& payload) {
-        std::vector<Subscriber> current_subs;
-        {
-            std::lock_guard<std::mutex> lock(mtx);
-            if (subscribers.find(evt) != subscribers.end()) {
-                current_subs = subscribers[evt];
-            }
-        }
-        
-        dispatch_payload(evt, payload);
-    }
-
-    const std::vector<Ks_Type>* get_signature(Ks_Handle evt) {
-        std::lock_guard<std::mutex> lock(mtx);
-        auto it = definitions.find(evt);
-        if (it != definitions.end()) return &it->second.signature;
+    if (idx >= impl->event_types.size() || !impl->event_types[idx]) {
         return nullptr;
     }
 
-private:
-    Ks_Handle_Id event_type_id;
-    Ks_Handle_Id sub_type_id;
-    std::mutex mtx;
-
-    std::unordered_map<std::string, Ks_Handle> name_to_handle;
-    std::unordered_map<Ks_Handle, EventDefinition> definitions;
-    std::unordered_map<Ks_Handle, std::vector<Subscriber>> subscribers;
-};
-
-KS_API Ks_EventManager ks_event_manager_create() {
-    return new (ks_alloc(sizeof(EventManager_Impl), KS_LT_USER_MANAGED, KS_TAG_INTERNAL_DATA)) EventManager_Impl();
+    return impl->event_types[idx]->name.c_str();
 }
 
-KS_API ks_no_ret ks_event_manager_destroy(Ks_EventManager em) {
-    if (em) {
-        static_cast<EventManager_Impl*>(em)->~EventManager_Impl();
-        ks_dealloc(em);
+Ks_Handle ks_event_manager_subscribe_ex(Ks_EventManager em, Ks_Handle event_handle, Ks_EventCallback callback, void* user_data, Ks_UserDataFreeCallback free_cb) {
+    auto* impl = (Ks_EventManager_Impl*)em;
+
+    if (!ks_handle_is_type(event_handle, impl->h_type_event_def)) {
+        KS_LOG_ERROR("Subscribe failed: Invalid event handle type");
+        return KS_INVALID_HANDLE;
+    }
+
+    uint32_t evt_idx = get_index_from_handle(event_handle);
+
+    std::lock_guard<std::mutex> lock(impl->mutex);
+
+    if (evt_idx >= impl->event_types.size() || !impl->event_types[evt_idx]) {
+        return KS_INVALID_HANDLE;
+    }
+
+    EventTypeData* data = impl->event_types[evt_idx];
+
+    Ks_Handle sub_h = ks_handle_make(impl->h_type_sub);
+
+    EventSubscriber sub;
+    sub.sub_id = sub_h;
+    sub.callback = callback;
+    sub.user_data = user_data;
+    sub.free_cb = free_cb;
+
+    data->subscribers.push_back(sub);
+    impl->sub_to_event_idx[sub_h] = evt_idx;
+
+    return sub_h;
+}
+
+KS_API void ks_event_manager_unsubscribe(Ks_EventManager em, Ks_Handle sub_handle) {
+    auto* impl = (Ks_EventManager_Impl*)em;
+
+    if (!ks_handle_is_type(sub_handle, impl->h_type_sub)) return;
+
+    std::lock_guard<std::mutex> lock(impl->mutex);
+
+    auto map_it = impl->sub_to_event_idx.find(sub_handle);
+    if (map_it == impl->sub_to_event_idx.end()) return;
+
+    uint32_t evt_idx = map_it->second;
+    if (evt_idx >= impl->event_types.size() || !impl->event_types[evt_idx]) return;
+
+    EventTypeData* data = impl->event_types[evt_idx];
+    auto& subs = data->subscribers;
+
+    for (auto it = subs.begin(); it != subs.end(); ++it) {
+        if (it->sub_id == sub_handle) {
+            cleanup_subscriber(*it);
+            subs.erase(it);
+            break;
+        }
+    }
+    impl->sub_to_event_idx.erase(map_it);
+}
+
+KS_API void ks_event_manager_publish(Ks_EventManager em, Ks_Handle event_handle, const void* data_ptr) {
+    KS_PROFILE_SCOPE("EventManager::Publish");
+    auto* impl = (Ks_EventManager_Impl*)em;
+
+    uint32_t idx = event_handle & KS_HANDLE_INDEX_MASK;
+
+    std::vector<EventSubscriber> safe_subs;
+    {
+        KS_PROFILE_SCOPE("EventManager::Lock&Copy");
+        std::lock_guard<std::mutex> lock(impl->mutex);
+        if (idx >= impl->event_types.size() || !impl->event_types[idx]) return;
+        safe_subs = impl->event_types[idx]->subscribers;
+    }
+    {
+        KS_PROFILE_SCOPE("EventManager::Callbacks");
+        for (const auto& sub : safe_subs) {
+            sub.callback(data_ptr, sub.user_data);
+        }
     }
 }
 
-KS_API Ks_Handle ks_event_manager_register_impl(Ks_EventManager em, ks_str name, const Ks_Type* types, ks_size count) {
-    return static_cast<EventManager_Impl*>(em)->register_event(name, types, count);
+KS_API void ks_event_manager_emit(Ks_EventManager em, Ks_Handle signal_handle){
+    ks_event_manager_publish(em, signal_handle, nullptr);
 }
-
-KS_API Ks_Handle ks_event_manager_get_event_handle(Ks_EventManager em, ks_str name) {
-    return static_cast<EventManager_Impl*>(em)->get_handle(name);
-}
-
-KS_API const Ks_Type* ks_event_manager_get_signature(Ks_EventManager em, Ks_Handle event, ks_size* out_count) {
-    auto* sig = static_cast<EventManager_Impl*>(em)->get_signature(event);
-    if (sig) {
-        if (out_count) *out_count = sig->size();
-        return sig->data();
-    }
-    if (out_count) *out_count = 0;
-    return nullptr;
-}
-
-KS_API Ks_Handle ks_event_manager_subscribe(Ks_EventManager em, Ks_Handle event, ks_event_callback callback, Ks_Payload user_data) {
-    return static_cast<EventManager_Impl*>(em)->subscribe(event, callback, user_data);
-}
-
-KS_API ks_no_ret ks_event_manager_unsubscribe(Ks_EventManager em, Ks_Handle sub) {
-    static_cast<EventManager_Impl*>(em)->unsubscribe(sub);
-}
-
-KS_API ks_no_ret ks_event_manager_publish(Ks_EventManager em, Ks_Handle event, ...) {
-    va_list args;
-    va_start(args, event);
-    static_cast<EventManager_Impl*>(em)->publish_variadic(event, args);
-    va_end(args);
-}
-
-
-ks_no_ret ks_event_manager_publish_direct(Ks_EventManager em, Ks_Handle event, Ks_Event_Payload pi) {
-    static_cast<EventManager_Impl*>(em)->publish_direct(event, *(PayloadInternal*)pi);
-}
-
-#define GET_PAYLOAD(p) ((PayloadInternal*)p)
-#define CHECK_IDX(idx, p) if (idx >= p->args.size())
-
-KS_API ks_size ks_event_get_args_count(Ks_Event_Payload data) {
-    auto* p = GET_PAYLOAD(data);
-    return p->args.size();
-}
-
-KS_API Ks_Type ks_event_get_arg_type(Ks_Event_Payload data, ks_size index) {
-    auto* p = GET_PAYLOAD(data);
-    if (index < p->args.size()) return p->args[index].type;
-    return KS_TYPE_UNKNOWN;
-}
-
-KS_API ks_bool ks_event_get_bool(Ks_Event_Payload data, ks_size index) {
-    auto* p = GET_PAYLOAD(data);
-    if (index < p->args.size() && p->args[index].type == KS_TYPE_BOOL) return p->args[index].b_val;
-    return false;
-}
-
-KS_API ks_char ks_event_get_char(Ks_Event_Payload data, ks_size index) {
-    auto* p = GET_PAYLOAD(data);
-    if (index < p->args.size() && p->args[index].type == KS_TYPE_CHAR) return p->args[index].c_val;
-    return 0;
-}
-
-KS_API ks_int ks_event_get_int(Ks_Event_Payload data, ks_size index) {
-    auto* p = GET_PAYLOAD(data);
-    if (index < p->args.size() && p->args[index].type == KS_TYPE_INT) return p->args[index].i_val;
-    return 0;
-}
-
-KS_API ks_float ks_event_get_float(Ks_Event_Payload data, ks_size index) {
-    auto* p = GET_PAYLOAD(data);
-    if (index < p->args.size() && p->args[index].type == KS_TYPE_FLOAT) return p->args[index].f_val;
-    return 0.0f;
-}
-
-KS_API ks_double ks_event_get_double(Ks_Event_Payload data, ks_size index) {
-    auto* p = GET_PAYLOAD(data);
-    if (index < p->args.size() && p->args[index].type == KS_TYPE_DOUBLE) return p->args[index].d_val;
-    return 0.0f;
-}
-
-KS_API ks_str ks_event_get_cstring(Ks_Event_Payload data, ks_size index) {
-    auto* p = GET_PAYLOAD(data);
-    if (index < p->args.size() && p->args[index].type == KS_TYPE_CSTRING)
-        return (const char*)p->args[index].buffer.data();
-    return "";
-}
-
-KS_API ks_ptr ks_event_get_ptr(Ks_Event_Payload data, ks_size index) {
-    auto* p = GET_PAYLOAD(data);
-    if (index < p->args.size() && p->args[index].type == KS_TYPE_PTR)
-        return p->args[index].p_val;
-    return nullptr;
-}
-
-KS_API Ks_UserData ks_event_get_userdata(Ks_Event_Payload data, ks_size index) {
-    auto* p = GET_PAYLOAD(data);
-    if (index < p->args.size() && p->args[index].type == KS_TYPE_USERDATA) {
-        Ks_UserData ud;
-        ud.data = (ks_ptr)p->args[index].buffer.data();
-        ud.size = p->args[index].buffer.size();
-        return ud;
-    }
-    return Ks_UserData{0};
-}
-
-KS_API Ks_Script_Table ks_event_get_script_table(Ks_Event_Payload data, ks_size index) {
-    auto* p = GET_PAYLOAD(data);
-    if (index < p->args.size() && p->args[index].type == KS_TYPE_SCRIPT_TABLE){
-        return p->args[index].t_val;
-    }
-    return Ks_Script_Table{0};
-}
-
-KS_API Ks_Script_Ctx ks_event_get_script_ctx(Ks_Event_Payload data) {
-    auto* p = GET_PAYLOAD(data);
-    return p->script_ctx;
-}
-

@@ -53,7 +53,11 @@ project("KeyStoneCore")
         system "macosx"
         
     filter "configurations:Debug"
-        defines { "DEBUG" , "KS_ENABLE_PROFILING", "KS_DEBUG" }
+        defines { 
+			"DEBUG" , 
+			--"KS_ENABLE_PROFILING", 
+			"KS_DEBUG" 
+		}
         symbols "On"
 
     filter "configurations:Release"

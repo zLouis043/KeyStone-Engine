@@ -360,6 +360,7 @@ KS_API ks_no_ret ks_reflection_register_typedef(ks_str existing, ks_str alias) {
 KS_API const Ks_Type_Info* ks_reflection_get_type(ks_str name) {
     std::lock_guard<std::mutex> lock(g_reflection_mutex);
     if (!name) return nullptr;
-    auto it = g_registry.find(name);
+    std::string real_name = ResolveAlias(name);
+    auto it = g_registry.find(real_name);
     return (it != g_registry.end()) ? it->second : nullptr;
 }

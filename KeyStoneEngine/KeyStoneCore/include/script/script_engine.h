@@ -416,6 +416,11 @@ KS_API ks_double ks_script_obj_as_number(Ks_Script_Ctx ctx, Ks_Script_Object obj
 KS_API ks_int64 ks_script_obj_as_integer(Ks_Script_Ctx ctx, Ks_Script_Object obj);
 KS_API ks_bool ks_script_obj_as_boolean(Ks_Script_Ctx ctx, Ks_Script_Object obj);
 KS_API ks_str ks_script_obj_as_cstring(Ks_Script_Ctx ctx, Ks_Script_Object obj);
+/**
+ * @brief Returns a direct pointer to the string data without copying/allocating.
+ * The pointer is valid as long as the Ks_Script_Object is valid (held in registry).
+ */
+KS_API const char* ks_script_obj_as_string_view(Ks_Script_Ctx ctx, Ks_Script_Object obj);
 KS_API Ks_UserData ks_script_obj_as_userdata(Ks_Script_Ctx ctx, Ks_Script_Object obj);
 KS_API Ks_Script_Table ks_script_obj_as_table(Ks_Script_Ctx ctx, Ks_Script_Object obj);
 KS_API Ks_Script_Function ks_script_obj_as_function(Ks_Script_Ctx ctx, Ks_Script_Object obj);
@@ -566,6 +571,12 @@ KS_API Ks_Script_Usertype_Builder ks_script_usertype_begin(Ks_Script_Ctx ctx, ks
  * Returns NULL if the type is not found in the reflection system.
  */
 KS_API Ks_Script_Usertype_Builder ks_script_usertype_begin_from_ref(Ks_Script_Ctx ctx, const char* type_name);
+
+#define KS_SCRIPT_USERTYPE_DEF(ctx, type) \
+    do{\
+        Ks_Script_Usertype_Builder* b = ks_script_usertype_begin_from_ref(ctx, #type);\
+        ks_script_usertype_end(ctx, b);\
+    }while (0)
 
 KS_API ks_no_ret ks_script_usertype_inherits_from(Ks_Script_Usertype_Builder builder, ks_str base_type_name);
 

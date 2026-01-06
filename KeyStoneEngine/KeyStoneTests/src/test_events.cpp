@@ -4,72 +4,97 @@
 #include <string>
 #include <vector>
 
+struct TestDataEvent {
+    int x, y;
+    char name[32];
+};
+
+struct TestPrimitiveEvent {
+    int id;
+    float value;
+    const char* message;
+};
+
+
+void register_test_reflection() {
+    if (!ks_reflection_get_type("TestPrimitiveEvent")) {
+        ks_reflect_struct(TestPrimitiveEvent,
+            ks_reflect_field(int, id),
+            ks_reflect_field(float, value),
+            ks_reflect_field(const char*, message)
+        );
+    }
+
+    if (!ks_reflection_get_type("TestDataEvent")) {
+        ks_reflect_struct(TestDataEvent,
+            ks_reflect_field(int, x),
+            ks_reflect_field(int, y),
+            ks_reflect_field(char, name, [32])
+        );
+    }
+}
+
 static int g_callback_count = 0;
 static int g_last_int_val = 0;
 static float g_last_float_val = 0.0f;
 static std::string g_last_string_val = "";
+static TestDataEvent g_received_data = {};
 
 void reset_test_globals() {
     g_callback_count = 0;
     g_last_int_val = 0;
     g_last_float_val = 0.0f;
     g_last_string_val = "";
+    memset(&g_received_data, 0, sizeof(TestDataEvent));
 }
 
-ks_bool on_primitive_event(Ks_Event_Payload payload, Ks_Payload user_data) {
+void on_primitive_event(Ks_EventData data, void* user_data) {
     g_callback_count++;
+    const TestPrimitiveEvent* evt = (const TestPrimitiveEvent*)data;
 
-    g_last_int_val = ks_event_get_int(payload, 0);
-    g_last_float_val = ks_event_get_float(payload, 1);
-    const char* str = ks_event_get_cstring(payload, 2);
-    if (str) g_last_string_val = str;
-
-    return ks_true;
+    g_last_int_val = evt->id;
+    g_last_float_val = evt->value;
+    if (evt->message) g_last_string_val = evt->message;
 }
 
-struct TestData {
-    int x, y;
-    char name[32];
-};
-
-static TestData g_received_data = {};
-
-ks_bool on_userdata_event(Ks_Event_Payload payload, Ks_Payload user_data) {
+void on_data_event(Ks_EventData data, void* user_data) {
     g_callback_count++;
+    const TestDataEvent* evt = (const TestDataEvent*)data;
+    g_received_data = *evt;
+}
 
-    Ks_UserData ud = ks_event_get_userdata(payload, 0);
-    if (ud.data) {
-        memcpy(&g_received_data, ud.data, ud.size);
-    }
-    return ks_true;
+void on_signal_event(Ks_EventData data, void* user_data) {
+    g_callback_count++;
+}
+
+void on_user_data_check(Ks_EventData data, void* user_data) {
+    int* val = (int*)user_data;
+    (*val)++;
 }
 
 TEST_CASE("C API: Event Manager") {
     ks_memory_init();
+    ks_reflection_init();
+    register_test_reflection();
     reset_test_globals();
 
     Ks_EventManager em = ks_event_manager_create();
     REQUIRE(em != nullptr);
 
-    SUBCASE("Registration & Handles") {
-        Ks_Handle evt_handle = ks_event_manager_register(em, "TestEvent", KS_TYPE_INT);
-
-        CHECK(evt_handle != KS_INVALID_HANDLE);
-
-        Ks_Handle retrieved = ks_event_manager_get_event_handle(em, "TestEvent");
-        CHECK(retrieved == evt_handle);
-
-        CHECK(ks_event_manager_get_event_handle(em, "NonExistent") == KS_INVALID_HANDLE);
+    SUBCASE("Registration") {
+        CHECK(ks_event_manager_register_type(em, "TestPrimitiveEvent") != KS_INVALID_HANDLE);
+        CHECK(ks_event_manager_register_signal(em, "TestSignal") != KS_INVALID_HANDLE);
+        CHECK(ks_event_manager_register_type(em, "NonExistentType") == KS_INVALID_HANDLE);
     }
 
     SUBCASE("Publish & Subscribe (Primitives)") {
-        Ks_Handle evt = ks_event_manager_register(em, "PrimEvent", 
-                KS_TYPE_INT, KS_TYPE_FLOAT, KS_TYPE_CSTRING);
+        Ks_Handle test_primitive_e = ks_event_manager_register_type(em, "TestPrimitiveEvent");
 
-        Ks_Handle sub = ks_event_manager_subscribe(em, evt, on_primitive_event, KS_NO_PAYLOAD);
+        Ks_Handle sub = ks_event_manager_subscribe(em, test_primitive_e, on_primitive_event, nullptr);
         CHECK(sub != KS_INVALID_HANDLE);
 
-        ks_event_manager_publish(em, evt, 42, 3.14f, "Keystone");
+        TestPrimitiveEvent evt_data = { 42, 3.14f, "Keystone" };
+        ks_event_manager_publish(em, test_primitive_e, &evt_data);
 
         CHECK(g_callback_count == 1);
         CHECK(g_last_int_val == 42);
@@ -77,53 +102,74 @@ TEST_CASE("C API: Event Manager") {
         CHECK(g_last_string_val == "Keystone");
     }
 
-    SUBCASE("Userdata Passing") {
-        Ks_Handle evt = ks_event_manager_register(em, "DataEvent", KS_TYPE_USERDATA);
+    SUBCASE("Publish & Subscribe (Struct Data)") {
+        Ks_Handle test_data_e = ks_event_manager_register_type(em, "TestDataEvent");
 
-        ks_event_manager_subscribe(em, evt, on_userdata_event, KS_NO_PAYLOAD);
+        ks_event_manager_subscribe(em, test_data_e, on_data_event, nullptr);
 
-        TestData data;
-        data.x = 100;
-        data.y = 200;
-        strcpy(data.name, "Player");
-        ks_event_manager_publish(em, evt, KS_USERDATA(data));
+        TestDataEvent send_data;
+        send_data.x = 100;
+        send_data.y = 200;
+
+        ks_event_manager_publish(em, test_data_e, &send_data);
 
         CHECK(g_callback_count == 1);
         CHECK(g_received_data.x == 100);
         CHECK(g_received_data.y == 200);
-        CHECK(strcmp(g_received_data.name, "Player") == 0);
+    }
+
+    SUBCASE("Signals (No Payload)") {
+        Ks_Handle stop_engine_s = ks_event_manager_register_signal(em, "StopEngine");
+
+        ks_event_manager_subscribe(em, stop_engine_s, on_signal_event, nullptr);
+
+        ks_event_manager_emit(em, stop_engine_s);
+
+        CHECK(g_callback_count == 1);
+    }
+
+    SUBCASE("User Data Passing") {
+        Ks_Handle ping_e  =ks_event_manager_register_signal(em, "Ping");
+
+        int my_counter = 0;
+        ks_event_manager_subscribe(em, ping_e, on_user_data_check, &my_counter);
+
+        ks_event_manager_emit(em, ping_e);
+
+        CHECK(my_counter == 1);
     }
 
     SUBCASE("Unsubscribe Logic") {
-        Ks_Handle evt = ks_event_manager_register(em, "UnsubTest", KS_TYPE_INT);
+        Ks_Handle update_e =  ks_event_manager_register_signal(em, "Update");
 
-        Ks_Handle sub = ks_event_manager_subscribe(em, evt, on_primitive_event, KS_NO_PAYLOAD);
+        Ks_Handle sub = ks_event_manager_subscribe(em, update_e, on_signal_event, nullptr);
 
-        ks_event_manager_publish(em, evt, 1, 0.0f, "");
+        ks_event_manager_emit(em, update_e);
         CHECK(g_callback_count == 1);
 
         ks_event_manager_unsubscribe(em, sub);
 
-        ks_event_manager_publish(em, evt, 2, 0.0f, "");
+        ks_event_manager_emit(em, update_e);
         CHECK(g_callback_count == 1);
     }
 
     SUBCASE("Multiple Subscribers") {
-        Ks_Handle evt = ks_event_manager_register(em, "MultiTest", KS_TYPE_INT);
+        Ks_Handle tick_e = ks_event_manager_register_signal(em, "Tick");
 
-        Ks_Handle sub1 = ks_event_manager_subscribe(em, evt, on_primitive_event, KS_NO_PAYLOAD);
-        Ks_Handle sub2 = ks_event_manager_subscribe(em, evt, on_primitive_event, KS_NO_PAYLOAD);
+        Ks_Handle sub1 = ks_event_manager_subscribe(em, tick_e, on_signal_event, nullptr);
+        Ks_Handle sub2 = ks_event_manager_subscribe(em, tick_e, on_signal_event, nullptr);
 
-        ks_event_manager_publish(em, evt, 10, 0.0f, "");
+        ks_event_manager_emit(em, tick_e);
 
         CHECK(g_callback_count == 2);
 
         ks_event_manager_unsubscribe(em, sub1);
 
-        ks_event_manager_publish(em, evt, 20, 0.0f, "");
+        ks_event_manager_emit(em, tick_e);
         CHECK(g_callback_count == 3);
     }
 
     ks_event_manager_destroy(em);
+    ks_reflection_shutdown();
     ks_memory_shutdown();
 }

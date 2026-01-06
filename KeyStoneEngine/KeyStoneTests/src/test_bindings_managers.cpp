@@ -4,6 +4,33 @@
 #include <thread>
 #include <fstream>
 
+static int g_event_int = 0;
+
+static void reset_static_vars() {
+    g_event_int = 0;
+}
+
+struct NativeTestEvent {
+    int id;
+    float value;
+};
+
+void register_native_event_reflection() {
+    if (!ks_reflection_get_type("NativeTestEvent")) {
+        ks_reflect_struct(NativeTestEvent,
+            ks_reflect_field(int, id),
+            ks_reflect_field(float, value)
+        );
+    }
+}
+
+void register_native_event_lua(Ks_Script_Ctx ctx) {
+    auto b = ks_script_usertype_begin(ctx, "NativeTestEvent", sizeof(NativeTestEvent));
+    ks_script_usertype_add_field(b, "id", KS_TYPE_INT, offsetof(NativeTestEvent, id), nullptr);
+    ks_script_usertype_add_field(b, "value", KS_TYPE_FLOAT, offsetof(NativeTestEvent, value), nullptr);
+    ks_script_usertype_end(b);
+}
+
 struct SimpleAsset { int id; };
 Ks_AssetData simple_load(ks_str p) {
     SimpleAsset* a = (SimpleAsset*)ks_alloc(sizeof(SimpleAsset), KS_LT_USER_MANAGED, KS_TAG_RESOURCE);
@@ -14,33 +41,45 @@ void simple_free(Ks_AssetData d) { ks_dealloc((void*)d); }
 
 TEST_CASE("Bindings: Managers Integration") {
     ks_memory_init();
-    ResetTestGlobals();
+    ks_reflection_init();
+    reset_static_vars();
+
+    register_native_event_reflection();
 
     Ks_Script_Ctx ctx = ks_script_create_ctx();
     ks_types_lua_bind(ctx);
 
-    SUBCASE("Event Manager Binding") {
+    register_native_event_lua(ctx);
+
+    SUBCASE("Event Manager: C++ Native Publish -> Lua Subscribe") {
         Ks_EventManager em = ks_event_manager_create();
         ks_event_manager_lua_bind(em, ctx);
 
-        Ks_Handle h = ks_event_manager_register(em, "TestEvent", KS_TYPE_INT);
+        Ks_Handle native_test_e = ks_event_manager_register_type(em, "NativeTestEvent");
 
-        ks_script_set_global(ctx, "record_event",
+        ks_script_set_global(ctx, "record_native",
             ks_script_create_cfunc_with_upvalues(ctx, KS_SCRIPT_FUNC_VOID([](Ks_Script_Ctx c) {
                 g_event_int = (int)ks_script_obj_as_integer(c, ks_script_get_arg(c, 1));
                 return 0;
-                }), 0));
+            }), 0));
 
         const char* script = R"(
-            local h = events.get("TestEvent")
-            events.subscribe(h, function(val)
-                record_event(val)
+            local e_h = events.get_handle("NativeTestEvent")
+            events.subscribe(e_h, function(evt)
+                record_native(evt.id)
             end)
         )";
-        ks_script_do_cstring(ctx, script);
 
-        ks_event_manager_publish(em, h, 999);
-        CHECK(g_event_int == 999);
+        Ks_Script_Function_Call_Result res = ks_script_do_cstring(ctx, script);
+        CHECK(ks_script_call_succeded(ctx, res));
+
+        NativeTestEvent evt_data;
+        evt_data.id = 1234;
+        evt_data.value = 56.78f;
+
+        ks_event_manager_publish(em, native_test_e, &evt_data);
+
+        CHECK(g_event_int == 1234);
 
         ks_event_manager_destroy(em);
     }
@@ -91,5 +130,6 @@ TEST_CASE("Bindings: Managers Integration") {
     }
 
     ks_script_destroy_ctx(ctx);
+    ks_reflection_shutdown();
     ks_memory_shutdown();
 }
