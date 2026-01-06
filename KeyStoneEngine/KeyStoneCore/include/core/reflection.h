@@ -51,6 +51,9 @@ struct Ks_Args_View {
         : args(l.begin()), count((ks_size)l.size()) {
     }
 
+    Ks_Args_View(const Ks_Arg_Def* a, ks_size c)
+        : args(a), count(c) {}
+
     Ks_Args_View() : args(nullptr), count(0) {}
 };
 extern "C" {
@@ -156,7 +159,11 @@ extern "C" {
 #define ks_arg(type, name) { #type, #name }
 
 #ifdef __cplusplus
-#define ks_args(...) Ks_Args_View{ __VA_ARGS__ }
+#define ks_args(...) \
+    ([]() -> Ks_Args_View { \
+        static const Ks_Arg_Def _args[] = { __VA_ARGS__ }; \
+        return Ks_Args_View(_args, (ks_size)(sizeof(_args) / sizeof(Ks_Arg_Def))); \
+    }())
 #define ks_no_args() Ks_Args_View()
 #else
 #define ks_args(...) (Ks_Args_View){ (Ks_Arg_Def[]){ __VA_ARGS__ }, sizeof((Ks_Arg_Def[]){ __VA_ARGS__ }) / sizeof(Ks_Arg_Def) }
