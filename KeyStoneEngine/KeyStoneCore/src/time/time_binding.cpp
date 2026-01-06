@@ -140,8 +140,7 @@ ks_returns_count l_timer_set_function(Ks_Script_Ctx ctx) {
         data->tm = ud->tm;
         data->timer_handle = ud->handle;
 
-        ks_script_promote(ctx, func);
-        data->func_ref = func;
+        data->func_ref = ks_script_ref_obj(ctx, func);
 
         {
             std::lock_guard<std::mutex> lock(s_timers_mutex);

@@ -30,8 +30,6 @@ struct Serializer_Impl {
 static Serializer_Impl* impl(Ks_Serializer s) { return (Serializer_Impl*)s; }
 static Value* val(Ks_Json j) { return (Value*)j; }
 
-// --- Utils ---
-
 static std::string clean_type_names(const char* raw_name) {
     if (!raw_name) return "";
     std::string s = raw_name;
@@ -61,26 +59,18 @@ static size_t get_primitive_size(Ks_Type type) {
     }
 }
 
-// --- Forward Declarations ---
 static Ks_Json serialize_type_recursive(Ks_Serializer ser, const void* instance, const Ks_Type_Info* info);
 static bool deserialize_type_recursive(Ks_Serializer ser, void* instance, const Ks_Type_Info* info, Ks_Json json);
 
-// ============================================================================
-// SERIALIZATION LOGIC
-// ============================================================================
-
 static Ks_Json serialize_primitive(Ks_Serializer ser, const void* addr, Ks_Type type, int ptr_depth) {
-    // 1. Gestione Stringhe (Unici puntatori supportati)
     if ((type == KS_TYPE_CHAR && ptr_depth == 1) || type == KS_TYPE_CSTRING) {
         const char* str_val = *(const char**)addr;
         if (str_val) return ks_json_create_string(ser, str_val);
         return ks_json_create_null(ser);
     }
 
-    // 2. Altri puntatori -> NULL (Evitiamo crash e complessità)
     if (ptr_depth > 0) return ks_json_create_null(ser);
 
-    // 3. Valori
     switch (type) {
     case KS_TYPE_BOOL:   return ks_json_create_bool(ser, *(bool*)addr);
     case KS_TYPE_CHAR:   return ks_json_create_number(ser, (double)*(char*)addr);
@@ -103,9 +93,8 @@ static Ks_Json serialize_array_recursive(Ks_Serializer ser, const void* base_add
         const void* item_addr = (const char*)base_addr + (i * stride);
         Ks_Json item_val = nullptr;
 
-        if (dim_index == field->dim_count - 1) { // Leaf
+        if (dim_index == field->dim_count - 1) {
             if (field->type == KS_TYPE_USERDATA) {
-                // Se è un puntatore a struct, lo ignoriamo (NULL) per evitare crash/cicli
                 if (field->ptr_depth > 0) item_val = ks_json_create_null(ser);
                 else item_val = serialize_type_recursive(ser, item_addr, elem_info);
             }
@@ -165,7 +154,6 @@ static Ks_Json serialize_type_recursive(Ks_Serializer ser, const void* instance,
                     const Ks_Type_Info* sub_info = ks_reflection_get_type(clean_name.c_str());
 
                     if (sub_info) {
-                        // Puntatore a Struct -> NULL
                         if (field->ptr_depth > 0) {
                             field_val = ks_json_create_null(ser);
                         }
@@ -188,12 +176,8 @@ static Ks_Json serialize_type_recursive(Ks_Serializer ser, const void* instance,
     return ks_json_create_null(ser);
 }
 
-// ============================================================================
-// DESERIALIZATION LOGIC
-// ============================================================================
 
 static void deserialize_primitive(void* addr, Ks_Type type, int ptr_depth, Ks_Json json) {
-    // 1. Gestione Stringhe
     if ((type == KS_TYPE_CHAR && ptr_depth == 1) || type == KS_TYPE_CSTRING) {
         ks_str json_str = ks_json_get_string(json);
         if (json_str) {
@@ -208,10 +192,8 @@ static void deserialize_primitive(void* addr, Ks_Type type, int ptr_depth, Ks_Js
         return;
     }
 
-    // 2. Altri puntatori -> Ignoriamo in lettura
     if (ptr_depth > 0) return;
 
-    // 3. Valori
     switch (type) {
     case KS_TYPE_BOOL:   *(bool*)addr = ks_json_get_bool(json); break;
     case KS_TYPE_CHAR:   *(char*)addr = (char)ks_json_get_number(json); break;
@@ -239,7 +221,6 @@ static void deserialize_array_recursive(Ks_Serializer ser, void* base_addr, cons
 
         if (dim_index == field->dim_count - 1) {
             if (field->type == KS_TYPE_USERDATA) {
-                // Puntatori a struct ignorati
                 if (field->ptr_depth == 0) {
                     deserialize_type_recursive(ser, item_addr, elem_info, item_json);
                 }
@@ -292,7 +273,6 @@ static bool deserialize_type_recursive(Ks_Serializer ser, void* instance, const 
                     std::string clean_name = clean_type_names(field->type_str);
                     const Ks_Type_Info* sub_info = ks_reflection_get_type(clean_name.c_str());
                     if (sub_info) {
-                        // Struct per valore (NO Puntatori)
                         if (field->ptr_depth == 0) {
                             deserialize_type_recursive(ser, field_addr, sub_info, field_json);
                         }
@@ -308,10 +288,6 @@ static bool deserialize_type_recursive(Ks_Serializer ser, void* instance, const 
     return false;
 }
 
-// ============================================================================
-// PUBLIC API IMPLEMENTATION
-// ============================================================================
-
 KS_API Ks_Serializer ks_serializer_create() {
     void* mem = ks_alloc(sizeof(Serializer_Impl), KS_LT_USER_MANAGED, KS_TAG_INTERNAL_DATA);
     return (Ks_Serializer)new(mem) Serializer_Impl();
@@ -325,7 +301,6 @@ KS_API ks_no_ret ks_serializer_destroy(Ks_Serializer ser) {
     }
 }
 
-// ... [Funzioni IO e Access rimangono identiche e necessarie per compilare] ...
 KS_API ks_bool ks_serializer_load_from_string(Ks_Serializer ser, ks_str json_string) {
     Serializer_Impl* s = impl(ser);
     s->node_pool.clear();
@@ -438,7 +413,8 @@ KS_API ks_size ks_json_array_size(Ks_Json arr) {
 }
 KS_API Ks_Json ks_json_array_get(Ks_Json arr, ks_size index) {
     Value* a = val(arr);
-    if (a && a->IsArray() && index < (ks_size)a->Size()) return (Ks_Json) & ((*a)[index]);
+    auto i = static_cast<rapidjson::SizeType>(index);
+    if (a && a->IsArray() && i < a->Size()) return (Ks_Json) & ((*a)[i]);
     return nullptr;
 }
 KS_API ks_double ks_json_get_number(Ks_Json json) {
@@ -463,8 +439,6 @@ KS_API ks_no_ret ks_json_object_foreach(Ks_Json obj, ks_json_foreach_cb cb, void
         }
     }
 }
-
-// --- Reflection Entry Points (SIMPLE & SAFE) ---
 
 KS_API Ks_Json ks_json_serialize(Ks_Serializer ser, const void* instance, ks_str type_name) {
     if (!ser || !instance || !type_name) return nullptr;

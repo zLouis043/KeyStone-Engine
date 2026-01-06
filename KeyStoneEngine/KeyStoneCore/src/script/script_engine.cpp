@@ -2379,7 +2379,34 @@ static Ks_Type lua_type_to_ks(lua_State* L, int idx) {
     return KS_TYPE_UNKNOWN;
 }
 
-KS_API ks_no_ret ks_script_free_obj(Ks_Script_Ctx ctx, Ks_Script_Object obj)
+KS_API Ks_Script_Object ks_script_ref_obj(Ks_Script_Ctx ctx, Ks_Script_Object obj)
+{
+    if (!ctx) return ks_script_create_invalid_obj(ctx);
+    auto* sctx = static_cast<KsScriptEngineCtx*>(ctx);
+    lua_State* L = sctx->get_raw_state();
+
+    ks_script_stack_push_obj(ctx, obj);
+
+    Ks_Script_Ref ref = sctx->store_in_registry();
+
+    Ks_Script_Object ref_obj = obj;
+
+    switch (obj.type) {
+    case KS_TYPE_SCRIPT_TABLE: ref_obj.val.table_ref = ref; break;
+    case KS_TYPE_SCRIPT_FUNCTION: ref_obj.val.function_ref = ref; break;
+    case KS_TYPE_SCRIPT_COROUTINE: ref_obj.val.coroutine_ref = ref; break;
+    case KS_TYPE_USERDATA: ref_obj.val.userdata_ref = ref; break;
+    case KS_TYPE_CSTRING: ref_obj.val.string_ref = ref; break;
+    default:
+        ref_obj.val.generic_ref = ref;
+        break;
+    }
+
+    ref_obj.state = KS_SCRIPT_OBJECT_VALID;
+    return ref_obj;
+}
+
+ks_no_ret ks_script_free_obj(Ks_Script_Ctx ctx, Ks_Script_Object obj)
 {
     if (!ctx) return;
     auto* sctx = static_cast<KsScriptEngineCtx*>(ctx);

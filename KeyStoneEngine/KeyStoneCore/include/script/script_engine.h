@@ -316,6 +316,16 @@ KS_API Ks_Script_Userdata ks_script_create_usertype_instance(Ks_Script_Ctx ctx, 
 KS_API Ks_Script_Object ks_script_create_usertype_ref(Ks_Script_Ctx ctx, ks_str type_name, void* ptr);
 
 /**
+ * @brief Creates a strong registry reference for the given script object.
+ * This prevents the garbage collector from collecting the object until freed.
+ * Updates the object internal state to VALID with the new reference ID.
+ * @param ctx The script context.
+ * @param obj The object to reference.
+ * @return A new Ks_Script_Object holding the strong reference.
+ */
+KS_API Ks_Script_Object ks_script_ref_obj(Ks_Script_Ctx ctx, Ks_Script_Object obj);
+
+/**
  * @brief Frees a script object, releasing its registry reference.
  * @param ctx The script context.
  * @param obj The object to free.

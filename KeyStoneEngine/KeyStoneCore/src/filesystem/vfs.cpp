@@ -175,7 +175,7 @@ KS_API ks_bool ks_vfs_resolve(ks_str virtual_path, char* out_path, ks_size max_l
 
     if (res.length() >= max_len) return false;
 
-    strcpy(out_path, res.c_str());
+    memcpy(out_path, res.c_str(), res.length() + 1);
     return true;
 }
 
