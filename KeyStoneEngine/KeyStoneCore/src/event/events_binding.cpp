@@ -7,6 +7,7 @@
 #include "../../include/memory/memory.h"
 #include <unordered_map>
 #include <string>
+#include <string.h>
 
 #define BINDING_HANDLE_MASK 0x00FFFFFF
 
