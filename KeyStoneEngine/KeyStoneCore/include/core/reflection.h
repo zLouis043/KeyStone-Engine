@@ -46,11 +46,7 @@ extern "C" {
 struct Ks_Args_View {
     const Ks_Arg_Def* args;
     ks_size count;
-
-    Ks_Args_View(std::initializer_list<Ks_Arg_Def> l)
-        : args(l.begin()), count((ks_size)l.size()) {
-    }
-
+    
     Ks_Args_View(const Ks_Arg_Def* a, ks_size c)
         : args(a), count(c) {}
 
