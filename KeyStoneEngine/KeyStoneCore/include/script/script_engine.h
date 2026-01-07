@@ -614,7 +614,12 @@ KS_API ks_no_ret ks_script_usertype_add_field(Ks_Script_Usertype_Builder builder
 KS_API ks_no_ret ks_script_usertype_add_property(Ks_Script_Usertype_Builder builder, ks_str name, ks_script_cfunc getter, ks_script_cfunc setter);
 
 /** @brief Registers Lua metamethods (e.g., __add, __tostring). */
-KS_API ks_no_ret ks_script_usertype_add_metamethod(Ks_Script_Usertype_Builder builder, Ks_Script_Metamethod mt, ks_script_cfunc func);
+KS_API ks_no_ret ks_script_usertype_add_metamethod(
+    Ks_Script_Usertype_Builder builder,
+    Ks_Script_Metamethod mt,
+    const Ks_Script_Sig_Def * sigs,
+    ks_size count
+);
 
 /**
  * @brief Finalizes and registers the user type.

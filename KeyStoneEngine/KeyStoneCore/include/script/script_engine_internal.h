@@ -212,7 +212,7 @@ struct KsUsertypeBuilder {
 	std::map<std::string, std::vector<MethodInfo>> static_methods;
 	std::vector<PropertyInfo> properties;
 	std::vector<FieldInfo> fields;
-	std::map<Ks_Script_Metamethod, ks_script_cfunc> metamethods;
+	std::map<std::string, std::vector<MethodInfo>> metamethods;
 
 	std::vector<const Ks_VTable_Entry*> reflected_methods;
 	std::vector<const Ks_VTable_Entry*> reflected_static_methods;

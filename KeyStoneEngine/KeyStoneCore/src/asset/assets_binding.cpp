@@ -244,9 +244,15 @@ KS_API ks_no_ret ks_assets_manager_lua_bind(Ks_Script_Ctx ctx, Ks_AssetsManager 
     Ks_Script_Object upval = ks_script_create_lightuserdata(ctx, bctx);
 
     auto b = ks_script_usertype_begin(ctx, "AssetHandle", sizeof(AssetProxy));
-    ks_script_usertype_add_metamethod(b, KS_SCRIPT_MT_INDEX, l_asset_proxy_index);
-    ks_script_usertype_add_metamethod(b, KS_SCRIPT_MT_NEWINDEX, l_asset_proxy_newindex);
-    ks_script_usertype_add_metamethod(b, KS_SCRIPT_MT_EQ, l_asset_proxy_eq);
+    ks_script_usertype_add_metamethod(b, KS_SCRIPT_MT_INDEX, KS_SCRIPT_FUNC(
+        l_asset_proxy_index, KS_TYPE_USERDATA, KS_TYPE_CSTRING)
+    );
+    ks_script_usertype_add_metamethod(b, KS_SCRIPT_MT_NEWINDEX, KS_SCRIPT_FUNC(
+        l_asset_proxy_newindex, KS_TYPE_USERDATA, KS_TYPE_CSTRING, KS_TYPE_SCRIPT_ANY)
+    );
+    ks_script_usertype_add_metamethod(b, KS_SCRIPT_MT_EQ, KS_SCRIPT_FUNC(
+        l_asset_proxy_eq, KS_TYPE_USERDATA, KS_TYPE_USERDATA)
+    );
     ks_script_usertype_end(b);
 
     Ks_Script_Table assets_tbl = ks_script_create_named_table(ctx, "assets");

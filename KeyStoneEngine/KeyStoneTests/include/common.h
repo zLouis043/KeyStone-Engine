@@ -166,12 +166,9 @@ inline int TestHero_GetHP(TestHero* self) { return self->hp; }
 inline void TestHero_SetActive(TestHero* self, bool active) { self->is_active = active; }
 inline int TestHero_GetTotalHeroes() { return 999; }
 
-inline int __tostring_TestHero(Ks_Script_Ctx ctx) {
-    TestHero* self = (TestHero*)ks_script_get_self(ctx);
-    ks_script_stack_push_cstring(ctx, "Hero");
-    return 1;
+inline const char* __tostring_TestHero(TestHero* self) {
+    return "Hero";
 }
-
 struct OverloadTester {
     int last_result;
 };
@@ -196,6 +193,74 @@ inline void OverloadTester_Init(OverloadTester* self) {
     self->last_result = -1;
 }
 
+struct PowerValue {
+    int value;
+    int generation;
+};
+
+inline const char* __tostring_PowerValue(PowerValue* self) {
+    return "PowerValue(69)";
+}
+
+inline PowerValue __add_PowerValue_S(PowerValue* a, PowerValue* b) {
+    return PowerValue{ a->value + b->value, a->generation };
+}
+
+inline PowerValue __add_PowerValue_I(PowerValue* a, int b) {
+    return PowerValue{ a->value + b, a->generation };
+}
+
+inline ks_returns_count l_powervalue_sub(Ks_Script_Ctx ctx) {
+    auto* self = (PowerValue*)ks_script_usertype_get_ptr(ctx, ks_script_get_arg(ctx, 1));
+    if (!self) {
+        ks_script_stack_push_obj(ctx, ks_script_create_nil(ctx));
+        return 1;
+    }
+
+    int to_sub = ks_script_obj_as_integer(ctx, ks_script_get_arg(ctx, 2));
+
+    auto res_obj = ks_script_create_usertype_instance(ctx, "PowerValue");
+    auto* res = (PowerValue*)ks_script_usertype_get_ptr(ctx, res_obj);
+    if (res) {
+        res->value = self->value - to_sub;
+        res->generation = self->generation;
+    }
+
+    ks_script_stack_push_obj(ctx, res_obj);
+
+    return 1;
+}
+
+struct Vec4 {
+    float x, y, z, w;
+};
+
+inline Vec4 Vec4_Add(Vec4* a, Vec4* b) {
+    return Vec4{ a->x + b->x, a->y + b->y, a->z + b->z, a->w + b->w };
+}
+
+inline const char* __tostring_Vec4(Vec4* v) {
+    return "Vec4";
+}
+
+struct MixedData {
+    char flag;
+    double val;
+    int count;
+};
+
+inline MixedData Mixed_Make(int c, double v) {
+    MixedData m;
+    m.flag = 'A';
+    m.val = v;
+    m.count = c;
+    return m;
+}
+
+inline bool Vec4_Eq(Vec4* a, Vec4* b) {
+    return (a->x == b->x && a->y == b->y && a->z == b->z && a->w == b->w);
+}
+
 inline void RegisterCommonReflection() {
     ks_reflection_shutdown();
     ks_reflection_init();
@@ -217,12 +282,12 @@ inline void RegisterCommonReflection() {
         ks_reflect_field(float, mana),
 
         ks_reflect_vtable_begin(TestHero),
-        ks_reflect_constructor(TestHero_Init, ks_args(ks_arg(int, x), ks_arg(int, y))),
-        ks_reflect_method(TestHero_Move, void, ks_args(ks_arg(int, dx), ks_arg(int, dy))),
-        ks_reflect_method(TestHero_GetHP, int, ks_no_args()),
-        ks_reflect_method(TestHero_SetActive, void, ks_args(ks_arg(bool, active))),
-        ks_reflect_static_method(__tostring_TestHero, int, ks_args(ks_arg(Ks_Script_Ctx, ctx))),
-        ks_reflect_static_method(TestHero_GetTotalHeroes, int, ks_no_args()),
+            ks_reflect_constructor(TestHero_Init, ks_args(ks_arg(int, x), ks_arg(int, y))),
+            ks_reflect_method(TestHero_Move, void, ks_args(ks_arg(int, dx), ks_arg(int, dy))),
+            ks_reflect_method(TestHero_GetHP, int, ks_no_args()),
+            ks_reflect_method(TestHero_SetActive, void, ks_args(ks_arg(bool, active))),
+            ks_reflect_static_method(__tostring_TestHero, const char*, ks_args(ks_arg(TestHero*, self))),
+            ks_reflect_static_method(TestHero_GetTotalHeroes, int, ks_no_args()),
         ks_reflect_vtable_end()
     );
 
@@ -230,13 +295,35 @@ inline void RegisterCommonReflection() {
         ks_reflect_field(int, last_result),
 
         ks_reflect_vtable_begin(OverloadTester),
-        ks_reflect_constructor(OverloadTester_Init, ks_no_args()),
-
-        ks_reflect_method_named("exec", Ov_Reset, void, ks_no_args()),
-        ks_reflect_method_named("exec", Ov_Set, void, ks_args(ks_arg(int, val))),
-        ks_reflect_method_named("exec", Ov_Add, void, ks_args(ks_arg(int, a), ks_arg(int, b))),
-        ks_reflect_method_named("exec", Ov_Hash, void, ks_args(ks_arg(const char*, s))),
-
+            ks_reflect_constructor(OverloadTester_Init, ks_no_args()),
+            ks_reflect_method_named("exec", Ov_Reset, void, ks_no_args()),
+            ks_reflect_method_named("exec", Ov_Set, void, ks_args(ks_arg(int, val))),
+            ks_reflect_method_named("exec", Ov_Add, void, ks_args(ks_arg(int, a), ks_arg(int, b))),
+            ks_reflect_method_named("exec", Ov_Hash, void, ks_args(ks_arg(const char*, s))),
         ks_reflect_vtable_end()
+    );
+
+    ks_reflect_struct(PowerValue,
+        ks_reflect_field(int, value),
+        ks_reflect_field(int, generation),
+
+        ks_reflect_static_method(__tostring_PowerValue, const char*, ks_args(ks_arg(PowerValue*, self))),
+        ks_reflect_static_method_named("__add", __add_PowerValue_S, PowerValue, ks_args(ks_arg(PowerValue*, a), ks_arg(PowerValue*, b))),
+        ks_reflect_static_method_named("__add", __add_PowerValue_I, PowerValue, ks_args(ks_arg(PowerValue*, a), ks_arg(int, b)))
+    );
+
+    ks_reflect_struct(Vec4,
+        ks_reflect_field(float, x), ks_reflect_field(float, y),
+        ks_reflect_field(float, z), ks_reflect_field(float, w),
+        ks_reflect_static_method(__tostring_Vec4, const char*, ks_args(ks_arg(Vec4*, s))),
+        ks_reflect_static_method_named("__add", Vec4_Add, Vec4, ks_args(ks_arg(Vec4*, a), ks_arg(Vec4*, b))),
+        ks_reflect_static_method_named("__eq", Vec4_Eq, bool, ks_args(ks_arg(Vec4*, a), ks_arg(Vec4*, b)))
+    );
+
+    ks_reflect_struct(MixedData,
+        ks_reflect_field(char, flag),
+        ks_reflect_field(double, val),
+        ks_reflect_field(int, count),
+        ks_reflect_static_method(Mixed_Make, MixedData, ks_args(ks_arg(int, c), ks_arg(double, v)))
     );
 }
