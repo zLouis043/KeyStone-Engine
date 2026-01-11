@@ -158,7 +158,7 @@ std::string AssetManager_Impl::resolve_path(const std::string& input_path) {
 	return input_path;
 }
 
-Ks_IAsset AssetManager_Impl:get_asset_interface_nolock(const std::string& type_name) {
+Ks_IAsset AssetManager_Impl::get_asset_interface_nolock(const std::string& type_name) {
 	auto found = assets_interfaces.find(type_name);
 	if (found == assets_interfaces.end()) return Ks_IAsset{0};
 	return found->second;
