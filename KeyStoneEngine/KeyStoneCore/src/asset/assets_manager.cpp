@@ -472,7 +472,6 @@ bool AssetManager_Impl::reload_asset(Ks_Handle handle) {
 	std::string source_path;
 	Ks_AssetData old_data = nullptr;
 
-	// 1. Leggiamo i dati necessari SOTTO LOCK
 	{
 		std::lock_guard<std::mutex> lock(assets_mutex);
 		auto found = assets_entries.find(handle);
@@ -485,10 +484,6 @@ bool AssetManager_Impl::reload_asset(Ks_Handle handle) {
 		source_path = entry.source_path;
 		old_data = entry.data;
 	}
-
-	// 2. Carichiamo la nuova risorsa SENZA LOCK (perch� pu� essere lento e pu� richiamare lock)
-	// FIX DEADLOCK: Usiamo get_asset_interface che � safe o accediamo direttamente se avessimo accesso.
-	// Ma qui dobbiamo trovare l'interfaccia. Facciamo lock per trovare interfaccia, poi unlock.
 
 	Ks_IAsset iface;
 	{
@@ -503,12 +498,10 @@ bool AssetManager_Impl::reload_asset(Ks_Handle handle) {
 		return false;
 	}
 
-	// 3. Scambiamo i dati SOTTO LOCK
 	{
 		std::lock_guard<std::mutex> lock(assets_mutex);
 		auto found = assets_entries.find(handle);
 		if (found == assets_entries.end()) {
-			// L'asset � stato rilasciato mentre caricavamo?
 			if (iface.destroy_fn) iface.destroy_fn(new_data);
 			return false;
 		}
@@ -516,7 +509,6 @@ bool AssetManager_Impl::reload_asset(Ks_Handle handle) {
 		found->second.data = new_data;
 	}
 
-	// 4. Distruggiamo i vecchi dati SENZA LOCK
 	if (old_data && iface.destroy_fn) {
 		iface.destroy_fn(old_data);
 	}
@@ -527,7 +519,6 @@ bool AssetManager_Impl::reload_asset(Ks_Handle handle) {
 bool AssetManager_Impl::reload_asset(const std::string& source_path) {
 	Ks_Handle handle = KS_INVALID_HANDLE;
 
-	// 1. Troviamo l'handle SOTTO LOCK e poi deleghiamo
 	{
 		std::lock_guard<std::mutex> lock(assets_mutex);
 		auto found = path_to_handle.find(source_path);
