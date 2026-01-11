@@ -57,7 +57,7 @@ public:
 
 	Ks_AssetData get_asset_data_from_handle(Ks_Handle handle);
 	std::string  get_asset_name_from_handle(Ks_Handle handle);
-	std::string&  get_asset_type_from_handle(Ks_Handle handle);
+	std::string  get_asset_type_from_handle(Ks_Handle handle);
 	const char* get_asset_type_from_handle_raw(Ks_Handle handle);
 	uint32_t  get_asset_ref_count_from_handle(Ks_Handle handle);
 	Ks_AssetState get_asset_state_from_handle(Ks_Handle handle);
@@ -86,26 +86,43 @@ static void on_asset_file_changed(ks_str path, ks_ptr user_data) {
 	am->reload_asset(path);
 }
 
-AssetManager_Impl::AssetManager_Impl() {
-	asset_type_id = ks_handle_register("Asset");
-	file_watcher = ks_file_watcher_create();
+AssetManager_Impl::AssetManager_Impl() 
+    : asset_type_id(KS_INVALID_HANDLE_ID)
+    , file_watcher(nullptr) 
+{
+    asset_type_id = ks_handle_register("Asset");
+    if (asset_type_id == KS_INVALID_HANDLE_ID) {
+        KS_LOG_ERROR("[Assets] Failed to register asset handle type");
+    }
+    
+    file_watcher = ks_file_watcher_create();
+    if (!file_watcher) {
+        KS_LOG_ERROR("[Assets] Failed to create file watcher");
+    }
 }
 
 AssetManager_Impl::~AssetManager_Impl() {
-	std::lock_guard<std::mutex> lock(assets_mutex);
-	ks_file_watcher_destroy(file_watcher);
+    if (file_watcher) {
+        ks_file_watcher_destroy(file_watcher);
+        file_watcher = nullptr;
+    }
 
-	for (auto& [handle, entry] : assets_entries) {
-		if (entry.data) {
-			auto interface = get_asset_interface(entry.type_name);
-			if (interface.destroy_fn) {
-				interface.destroy_fn(entry.data);
-			}
-		}
-	}
-	assets_entries.clear();
+    std::lock_guard<std::mutex> lock(assets_mutex);
+    std::map<std::string, Ks_IAsset> interfaces_copy = assets_interfaces;
+    
+    for (auto& [handle, entry] : assets_entries) {
+        if (entry.data) {
+            auto it = interfaces_copy.find(entry.type_name);
+            if (it != interfaces_copy.end() && it->second.destroy_fn) {
+                it->second.destroy_fn(entry.data);
+            }
+            entry.data = nullptr;
+        }
+    }
+    assets_entries.clear();
+    assets_name_to_handle.clear();
+    path_to_handle.clear();
 }
-
 
 Ks_Handle AssetManager_Impl::generate_handle() {
 	return ks_handle_make(asset_type_id);
@@ -142,7 +159,7 @@ std::string AssetManager_Impl::get_asset_name_from_handle(Ks_Handle handle)
 	return found->second.asset_name;
 }
 
-std::string& AssetManager_Impl::get_asset_type_from_handle(Ks_Handle handle)
+std::string AssetManager_Impl::get_asset_type_from_handle(Ks_Handle handle)
 {
 	std::lock_guard<std::mutex> lock(assets_mutex);
 	static std::string empty = "";
@@ -227,6 +244,7 @@ void AssetManager_Impl::register_interface(const std::string& type_name, Ks_IAss
 
 Ks_IAsset AssetManager_Impl::get_asset_interface(const std::string& type_name)
 {
+	std::lock_guard<std::mutex> lock(assets_mutex);
 	auto found = assets_interfaces.find(type_name);
 	if (found == assets_interfaces.end()) return Ks_IAsset{ 0 };
 	return found->second;
@@ -383,6 +401,15 @@ Ks_Handle AssetManager_Impl::load_from_data(const std::string& type_name, const 
 
 void AssetManager_Impl::complete_async_load(Ks_Handle handle, Ks_AssetData data, bool success, Ks_IAsset original_iface) {
 	std::lock_guard<std::mutex> lock(assets_mutex);
+
+	f (handle == KS_INVALID_HANDLE) {
+        KS_LOG_ERROR("[Assets] Complete async load called with invalid handle");
+        if (success && data && original_iface.destroy_fn) {
+            original_iface.destroy_fn(data);
+        }
+        return;
+    }
+
 
 	auto it = assets_entries.find(handle);
 	if (it == assets_entries.end()) {
