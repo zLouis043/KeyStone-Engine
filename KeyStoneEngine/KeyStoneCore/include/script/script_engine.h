@@ -145,28 +145,31 @@ typedef struct {
 
 /** @brief Defines a signature with explicit argument types. */
 #define KS_SCRIPT_SIG_DEF(f, ...) \
-    Ks_Script_Sig_Def{ \
-        f, \
-        std::initializer_list<Ks_Type>{__VA_ARGS__}.begin(), \
-        std::initializer_list<Ks_Type>{__VA_ARGS__}.size() \
-    }
+    ([](ks_script_cfunc func) -> Ks_Script_Sig_Def { \
+        static const Ks_Type _safe_args[] = { __VA_ARGS__ }; \
+        return Ks_Script_Sig_Def{ \
+            func, \
+            _safe_args, \
+            sizeof(_safe_args) / sizeof(Ks_Type) \
+        }; \
+    }((ks_script_cfunc)f))
 
 /** @brief Defines a signature for a function taking no arguments (void). */
 #define KS_SCRIPT_SIG_DEF_VOID(f) \
     Ks_Script_Sig_Def{ f, nullptr, 0 }
 
+/** @brief Wraps multiple signatures for overloading. */
+#define KS_SCRIPT_OVERLOAD(...) \
+    std::initializer_list<Ks_Script_Sig_Def>{ __VA_ARGS__ }.begin(), \
+    std::initializer_list<Ks_Script_Sig_Def>{ __VA_ARGS__ }.size()
+
 /** @brief Wraps a single function into a method list. */
 #define KS_SCRIPT_FUNC(f, ...) \
-    std::initializer_list<Ks_Script_Sig_Def>{ KS_SCRIPT_SIG_DEF(f, __VA_ARGS__) }.begin(), 1
+    KS_SCRIPT_OVERLOAD(KS_SCRIPT_SIG_DEF(f, __VA_ARGS__))
 
 /** @brief Wraps a single void function into a method list. */
 #define KS_SCRIPT_FUNC_VOID(f) \
-    std::initializer_list<Ks_Script_Sig_Def>{ KS_SCRIPT_SIG_DEF_VOID(f) }.begin(), 1
-
-/** @brief Wraps multiple signatures for overloading. */
-#define KS_SCRIPT_OVERLOAD(...) \
-    std::initializer_list<Ks_Script_Sig_Def>{__VA_ARGS__}.begin(), \
-    std::initializer_list<Ks_Script_Sig_Def>{__VA_ARGS__}.size()
+    KS_SCRIPT_OVERLOAD(KS_SCRIPT_SIG_DEF_VOID(f))
 
 #else
 // C Implementation using Compound Literals
@@ -202,6 +205,12 @@ typedef enum {
   KS_SCRIPT_ERROR_INVALID_ARGUMENT,
   KS_SCRIPT_ERROR_INVALID_OBJECT,
   KS_SCRIPT_ERROR_SYMBOL_NOT_FOUND,
+  KS_SCRIPT_ERROR_TYPE_MISMATCH,
+  KS_SCRIPT_ERROR_OVERLOAD_NOT_FOUND,
+  KS_SCRIPT_ERROR_INVALID_USERTYPE,
+  KS_SCRIPT_ERROR_FIELD_NOT_FOUND,
+  KS_SCRIPT_ERROR_PROPERTY_READONLY,
+  KS_SCRIPT_ERROR_COROUTINE_DEAD,
 } Ks_Script_Error;
 
 /**
@@ -280,7 +289,6 @@ KS_API Ks_Script_Object ks_script_create_invalid_obj(Ks_Script_Ctx ctx);
  * @param f The C function pointer.
  * @return A script function object.
  */
- //KS_API Ks_Script_Function ks_script_create_cfunc(Ks_Script_Ctx ctx, ks_script_cfunc f);
 KS_API Ks_Script_Function ks_script_create_cfunc(Ks_Script_Ctx ctx, const Ks_Script_Sig_Def* sigs, ks_size count);
 /**
  * @brief Creates a C function with associated upvalues (closure).
@@ -331,6 +339,7 @@ KS_API Ks_Script_Object ks_script_ref_obj(Ks_Script_Ctx ctx, Ks_Script_Object ob
  * @param obj The object to free.
  */
 KS_API ks_no_ret ks_script_free_obj(Ks_Script_Ctx ctx, Ks_Script_Object obj);
+KS_API ks_size ks_script_debug_get_registry_size(Ks_Script_Ctx ctx);
 
 /** @brief Gets the last error code. */
 KS_API Ks_Script_Error ks_script_get_last_error(Ks_Script_Ctx ctx);

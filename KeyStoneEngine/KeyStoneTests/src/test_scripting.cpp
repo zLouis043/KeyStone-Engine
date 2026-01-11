@@ -500,6 +500,48 @@ TEST_CASE("C API: Script Engine Suite") {
         } ks_script_end_scope(ctx);
     }
 
+    SUBCASE("Error Reporting: Overload Mismatch with Typename") {
+        ks_script_begin_scope(ctx); {
+            struct Dummy { int x; };
+            auto b1 = ks_script_usertype_begin(ctx, "DummyType", sizeof(Dummy));
+            ks_script_usertype_add_constructor(b1, KS_SCRIPT_FUNC_VOID([](Ks_Script_Ctx c) {
+                new(ks_script_get_self(c)) Dummy{ 0 }; return 0;
+            }));
+            ks_script_usertype_end(b1);
+
+            struct Target { int v; };
+            auto func_accept_int = [](Ks_Script_Ctx c) -> ks_returns_count { return 0; };
+
+            auto b2 = ks_script_usertype_begin(ctx, "TargetType", sizeof(Target));
+            ks_script_usertype_add_constructor(b2, KS_SCRIPT_FUNC_VOID([](Ks_Script_Ctx c) {
+                new(ks_script_get_self(c)) Target{ 0 }; return 0;
+            }));
+            ks_script_usertype_add_method(b2, "process", KS_SCRIPT_FUNC(func_accept_int, KS_TYPE_INT));
+            ks_script_usertype_end(b2);
+
+            const char* script = R"(
+                local d = DummyType()
+                local t = TargetType()
+                t:process(d)
+            )";
+
+            Ks_Script_Function_Call_Result res = ks_script_do_cstring(ctx, script);
+
+            CHECK(ks_script_call_succeded(ctx, res) == ks_false);
+
+            const char* err = ks_script_get_last_error_str(ctx);
+            if (err) {
+                KS_LOG_INFO("Expected Error: %s", err);
+                CHECK(strstr(err, "[1] userdata (DummyType)") != nullptr);
+                CHECK(strstr(err, "Candidate 1: (integer)") != nullptr);
+            }
+            else {
+                CHECK_MESSAGE(false, "No error message returned!");
+            }
+
+        } ks_script_end_scope(ctx);
+    }
+
     ks_script_destroy_ctx(ctx);
     ks_memory_shutdown();
 }

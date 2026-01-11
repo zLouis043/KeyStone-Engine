@@ -29,6 +29,31 @@ struct UsertypeInfo {
 	std::string name;
 };
 
+struct ErrorContext {
+	const char* function_name;
+	int line_number;
+	const char* file_name;
+	std::map<std::string, std::string> context_vars;
+
+	std::string format() const {
+		std::string msg = "[" + std::string(file_name) + ":" + std::to_string(line_number) + "] " + function_name;
+		if (!context_vars.empty()) {
+			msg += " (";
+			for (const auto& [key, value] : context_vars) {
+				msg += key + "=" + value + ", ";
+			}
+			msg = msg.substr(0, msg.length() - 2) + ")";
+		}
+		return msg;
+	}
+};
+
+#define KS_SCRIPT_ERROR(ctx, code, ...) \
+    do { \
+        ErrorContext ec{__FUNCTION__, __LINE__, __FILE__}; \
+        ks_script_set_error_detail(ctx, code, ec.format().c_str(), ##__VA_ARGS__); \
+    } while(0)
+
 class KsScriptEngineCtx {
 public:
 	using Scope = std::vector<Ks_Script_Ref>;
@@ -94,7 +119,14 @@ public:
 
 	Ks_Script_Ref store_in_registry() {
 		Ks_Script_Ref ref = luaL_ref(p_state, LUA_REGISTRYINDEX);
-		p_scopes.back().push_back(ref);
+		if (ref == LUA_NOREF || ref == LUA_REFNIL) {
+			KS_LOG_ERROR("[Script] Failed to store object in registry (out of memory?)");
+			set_internal_error(KS_SCRIPT_ERROR_MEMORY,
+				"Failed to store object in Lua registry");
+		}
+		else {
+			p_scopes.back().push_back(ref);
+		}
 		return ref;
 	}
 
@@ -112,6 +144,8 @@ public:
 				return;
 			}
 		}
+
+		luaL_unref(p_state, LUA_REGISTRYINDEX, ref);
 	}
 
 	void promote_to_parent(Ks_Script_Ref ref) {
@@ -152,7 +186,7 @@ public:
 	}
 
 	const Ks_Script_Error_Info& get_error_info() const { return p_error_info;  }
-
+	std::vector<Scope> p_scopes;
 private:
 	void force_close_top_scope() {
 		if (p_scopes.empty()) return;
@@ -167,7 +201,7 @@ private:
 private:
 	lua_State* p_state = nullptr;
 	Ks_Script_Error_Info p_error_info;
-	std::vector<Scope> p_scopes;
+	
 	std::vector<CallFrame> p_call_stack;
 	std::map<std::string, UsertypeInfo> usertype_registry;
 };

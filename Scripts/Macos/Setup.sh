@@ -28,6 +28,7 @@ chmod +x bootstrap-vcpkg.sh
 ./vcpkg install libffi
 ./vcpkg install spdlog
 ./vcpkg install rapidjson
+./vcpkg install flecs
 ./vcpkg install doctest
 popd > /dev/null
 

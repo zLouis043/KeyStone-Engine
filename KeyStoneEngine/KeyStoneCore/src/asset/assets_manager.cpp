@@ -367,7 +367,6 @@ Ks_Handle AssetManager_Impl::load_from_data(const std::string& type_name, const 
 		return KS_INVALID_HANDLE;
 	}
 
-	// 4. Registrazione Entry
 	Ks_Handle handle = generate_handle();
 	Ks_AssetEntry entry;
 	entry.data = asset_data;
@@ -477,15 +476,13 @@ Ks_Handle AssetManager_Impl::get_asset(const std::string& asset_name)
 KS_API Ks_AssetsManager ks_assets_manager_create()
 {
 	Ks_AssetsManager am;
-	am = reinterpret_cast<AssetManager_Impl*>(
+	am = new(
 		ks_alloc(
 			sizeof(AssetManager_Impl),
 			KS_LT_USER_MANAGED,
 			KS_TAG_INTERNAL_DATA
 		)
-	);
-
-	new (am) AssetManager_Impl();
+	) AssetManager_Impl();
 
 	return am;
 }

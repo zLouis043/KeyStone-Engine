@@ -19,10 +19,10 @@ ks_returns_count vec3_ctor_bench(Ks_Script_Ctx ctx) {
 TEST_CASE("Performance Benchmarks") {
     ks_memory_init();
     ks_reflection_init();
+
     Ks_Script_Ctx ctx = ks_script_create_ctx();
     Ks_EventManager em = ks_event_manager_create();
     ks_event_manager_lua_bind(em, ctx);
-
     ks_types_lua_bind(ctx);
 
     SUBCASE("Benchmark: Lua -> C++ Call Overhead (100k calls)") {
@@ -41,9 +41,9 @@ TEST_CASE("Performance Benchmarks") {
         long long duration = measure_ms([&]() {
             Ks_Script_Function_Call_Result res = ks_script_do_cstring(ctx, script);
             if (!ks_script_call_succeded(ctx, res)) {
-                FAIL(ks_script_get_last_error_str(ctx));
+                CHECK_MESSAGE(false, ks_script_get_last_error_str(ctx));
             }
-        });
+            });
 
         KS_LOG_TRACE("[PERF] 100k Event Publishes (Lua->C++->Lua): %lld ms", duration);
     }
@@ -62,6 +62,7 @@ TEST_CASE("Performance Benchmarks") {
 
         long long duration = measure_ms([&]() {
             ks_script_do_cstring(ctx, alloc_script);
+            ks_script_gc_collect(ctx);
             });
 
         KS_LOG_TRACE("[PERF] 100k Userdata Creations: %lld ms", duration);

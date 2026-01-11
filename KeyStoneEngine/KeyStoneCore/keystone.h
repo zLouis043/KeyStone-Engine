@@ -26,4 +26,6 @@
 #include "./include/serialization/serializer.h"
 #include "./include/serialization/serializer_binding.h"
 #include "./include/job/job.h"
+#include "./include/ecs/ecs.h"
+#include "./include/ecs/ecs_binding.h"
 #include "./include/profiler/profiler.h"

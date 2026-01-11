@@ -45,7 +45,7 @@ static uint32_t get_index_from_handle(Ks_Handle h) {
 }
 
 KS_API Ks_EventManager ks_event_manager_create() {
-    auto* impl = new Ks_EventManager_Impl();
+    auto* impl = new(ks_alloc_debug(sizeof(Ks_EventManager_Impl), KS_LT_USER_MANAGED, KS_TAG_INTERNAL_DATA, "KsEventManagerImpl")) Ks_EventManager_Impl();
     impl->h_type_event_def = ks_handle_register("EventType");
     impl->h_type_sub = ks_handle_register("EventSub");
     ensure_signal_reflection();
@@ -69,9 +69,11 @@ KS_API void ks_event_manager_destroy(Ks_EventManager em) {
         for (auto& sub : type_data->subscribers) {
             cleanup_subscriber(sub);
         }
-        delete type_data;
+        type_data->~EventTypeData();
+        ks_dealloc(type_data);
     }
-    delete impl;
+    impl->~Ks_EventManager_Impl();
+    ks_dealloc(impl);
 }
 
 KS_API Ks_Handle ks_event_manager_register_type(Ks_EventManager em, const char* type_name) {
@@ -96,7 +98,7 @@ KS_API Ks_Handle ks_event_manager_register_type(Ks_EventManager em, const char* 
 
     uint32_t vector_idx = get_index_from_handle(new_handle);
 
-    EventTypeData* data = new EventTypeData();
+    EventTypeData* data = new(ks_alloc_debug(sizeof(EventTypeData), KS_LT_USER_MANAGED, KS_TAG_RESOURCE, "EventTypeData")) EventTypeData();
     data->name = type_name;
     data->type_info = info;
 

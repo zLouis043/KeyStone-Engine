@@ -21,8 +21,8 @@ struct LuaSubInfo {
 };
 
 void ks_register_lua_event_reflection(void) {
-    if (!ks_reflection_get_type("LuaEvent")) {
-        ks_reflect_struct(LuaEvent,
+    if (!ks_reflection_get_type("ScriptEvent")) {
+        ks_reflect_struct(ScriptEvent,
             ks_reflect_field(Ks_Script_Object, layout),
             ks_reflect_field(Ks_Script_Object, payload),
             ks_reflect_field(const char*, event_name)
@@ -63,13 +63,13 @@ static bool validate_payload(Ks_Script_Ctx ctx, Ks_Script_Object layout, Ks_Scri
 }
 
 static void lua_event_bridge(Ks_EventData data, void* user_data) {
-    KS_PROFILE_SCOPE("LuaEventBridge");
+    KS_PROFILE_SCOPE("ScriptEventBridge");
     LuaSubInfo* info = (LuaSubInfo*)user_data;
 
     int args = 0;
     if (data) {
         if (info->is_lua_wrapper) {
-            const LuaEvent* w = (const LuaEvent*)data;
+            const ScriptEvent* w = (const ScriptEvent*)data;
             ks_script_stack_push_obj(info->ctx, w->payload);
             args = 1;
         }
@@ -117,7 +117,7 @@ ks_returns_count events_register_lua(Ks_Script_Ctx ctx) {
     Ks_Handle h = KS_INVALID_HANDLE;
 
     if (ks_script_obj_type(ctx, layout) != KS_TYPE_NIL) {
-        ks_reflection_register_typedef("LuaEvent", name);
+        ks_reflection_register_typedef("ScriptEvent", name);
         h = ks_event_manager_register_type(em, name);
     }
     else {
@@ -165,7 +165,7 @@ ks_returns_count events_publish_lua(Ks_Script_Ctx ctx) {
         ks_event_manager_emit(em, h);
     }
     else {
-        LuaEvent w;
+        ScriptEvent w;
         w.layout = layout;
         w.payload = payload;
         w.event_name = "";
@@ -271,7 +271,7 @@ void ks_event_manager_lua_bind(Ks_EventManager em, Ks_Script_Ctx ctx) {
     g_lua_layouts_by_id.clear();
     ks_register_lua_event_reflection();
 
-    auto* b = ks_script_usertype_begin_from_ref(ctx, "LuaEvent");
+    auto* b = ks_script_usertype_begin_from_ref(ctx, "ScriptEvent");
     ks_script_usertype_end(b);
 
     Ks_Script_Object em_ptr = ks_script_create_lightuserdata(ctx, em);

@@ -17,7 +17,7 @@ struct TestPrimitiveEvent {
 
 
 void register_test_reflection() {
-    if (!ks_reflection_get_type("TestPrimitiveEvent")) {
+    if (!ks_reflection_get_type(ks_type_id(TestPrimitiveEvent))) {
         ks_reflect_struct(TestPrimitiveEvent,
             ks_reflect_field(int, id),
             ks_reflect_field(float, value),
@@ -25,7 +25,7 @@ void register_test_reflection() {
         );
     }
 
-    if (!ks_reflection_get_type("TestDataEvent")) {
+    if (!ks_reflection_get_type(ks_type_id(TestDataEvent))) {
         ks_reflect_struct(TestDataEvent,
             ks_reflect_field(int, x),
             ks_reflect_field(int, y),
@@ -82,13 +82,13 @@ TEST_CASE("C API: Event Manager") {
     REQUIRE(em != nullptr);
 
     SUBCASE("Registration") {
-        CHECK(ks_event_manager_register_type(em, "TestPrimitiveEvent") != KS_INVALID_HANDLE);
+        CHECK(ks_event_manager_register_type(em, ks_type_id(TestPrimitiveEvent)) != KS_INVALID_HANDLE);
         CHECK(ks_event_manager_register_signal(em, "TestSignal") != KS_INVALID_HANDLE);
         CHECK(ks_event_manager_register_type(em, "NonExistentType") == KS_INVALID_HANDLE);
     }
 
     SUBCASE("Publish & Subscribe (Primitives)") {
-        Ks_Handle test_primitive_e = ks_event_manager_register_type(em, "TestPrimitiveEvent");
+        Ks_Handle test_primitive_e = ks_event_manager_register_type(em, ks_type_id(TestPrimitiveEvent));
 
         Ks_Handle sub = ks_event_manager_subscribe(em, test_primitive_e, on_primitive_event, nullptr);
         CHECK(sub != KS_INVALID_HANDLE);
@@ -103,7 +103,7 @@ TEST_CASE("C API: Event Manager") {
     }
 
     SUBCASE("Publish & Subscribe (Struct Data)") {
-        Ks_Handle test_data_e = ks_event_manager_register_type(em, "TestDataEvent");
+        Ks_Handle test_data_e = ks_event_manager_register_type(em, ks_type_id(TestDataEvent));
 
         ks_event_manager_subscribe(em, test_data_e, on_data_event, nullptr);
 

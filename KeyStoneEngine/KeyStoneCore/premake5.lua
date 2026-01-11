@@ -29,7 +29,8 @@ project("KeyStoneCore")
 
 	links({
 		"lua",
-		"ffi"
+		"ffi",
+		"flecs_static"
 	})
 
 	defines({

@@ -76,20 +76,10 @@ private:
     void cleanup_user_managed_allocations();
 
 private:
-    struct AllocInfo {
-        size_t size;
-        Lifetime lt;
-        Tag tag;
-        const char* debug_name = "";
-        void* allocator_ptr;
-    };
 
     ArenaAllocator frame_arena;
     std::vector<std::unique_ptr<PoolAllocator>> resource_pools;
     LinearAllocator permanent_allocator;
-
-    std::unordered_map<void*, AllocInfo> allocation_map;
-    mutable std::mutex allocation_mutex;
 
     static std::unique_ptr<MemoryManager> s_instance;
     static std::mutex s_instance_mutex;
@@ -99,7 +89,4 @@ private:
     PoolAllocator* find_suitable_pool(size_t size);
     void* allocate_from_system(size_t size);
     void deallocate_to_system(void* ptr);
-    
-    void track_allocation(void* ptr, size_t size, Lifetime lt, Tag tag, const char* debug_name, void* allocator_ptr);
-    void untrack_allocation(void* ptr);
 };

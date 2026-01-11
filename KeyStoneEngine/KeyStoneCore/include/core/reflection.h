@@ -241,6 +241,8 @@ extern "C" {
 #define ks_reflect_destructor(func_ptr) \
     (ks_reflection_builder_add_vtable_entry(_b, NULL, (void*)func_ptr, KS_FUNC_DESTRUCTOR, "void", ks_no_args()), 0)
 
+#define ks_type_id(T) (sizeof(T), #T)
+
 #ifdef __cplusplus
 }
 #endif
