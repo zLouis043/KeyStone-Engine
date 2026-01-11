@@ -4,6 +4,7 @@
 
 #include <string>
 #include <unordered_map>
+#include <map>
 #include <tuple>
 
 #include <assert.h>
@@ -87,11 +88,11 @@ static void on_asset_file_changed(ks_str path, ks_ptr user_data) {
 }
 
 AssetManager_Impl::AssetManager_Impl() 
-    : asset_type_id(KS_INVALID_HANDLE_ID)
+    : asset_type_id(KS_INVALID_ID)
     , file_watcher(nullptr) 
 {
     asset_type_id = ks_handle_register("Asset");
-    if (asset_type_id == KS_INVALID_HANDLE_ID) {
+    if (asset_type_id == KS_INVALID_ID) {
         KS_LOG_ERROR("[Assets] Failed to register asset handle type");
     }
     
@@ -402,7 +403,7 @@ Ks_Handle AssetManager_Impl::load_from_data(const std::string& type_name, const 
 void AssetManager_Impl::complete_async_load(Ks_Handle handle, Ks_AssetData data, bool success, Ks_IAsset original_iface) {
 	std::lock_guard<std::mutex> lock(assets_mutex);
 
-	f (handle == KS_INVALID_HANDLE) {
+	if (handle == KS_INVALID_HANDLE) {
         KS_LOG_ERROR("[Assets] Complete async load called with invalid handle");
         if (success && data && original_iface.destroy_fn) {
             original_iface.destroy_fn(data);
