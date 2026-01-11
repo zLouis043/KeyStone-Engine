@@ -1,6 +1,7 @@
 #include "memory/memory.hpp"
 
 #include <algorithm>
+#include <string.h>
 #include <assert.h>
 
 #include "core/log.h"
@@ -222,7 +223,7 @@ void* MemoryManager::realloc(void* ptr, size_t new_size_in_bytes)
 
     void* new_ptr = alloc(new_size_in_bytes, Lifetime::USER_MANAGED, h->tag, "realloc_move");
     if (new_ptr) {
-        std::memcpy(new_ptr, ptr, std::min(old_size, new_size_in_bytes));
+        memcpy(new_ptr, ptr, std::min(old_size, new_size_in_bytes));
         dealloc(ptr);
     }
     return new_ptr;
