@@ -158,7 +158,7 @@ std::string AssetManager_Impl::resolve_path(const std::string& input_path) {
 	return input_path;
 }
 
-Ks_IAsset get_asset_interface_nolock(const std::string& type_name) {
+Ks_IAsset AssetManager_Impl:get_asset_interface_nolock(const std::string& type_name) {
 	auto found = assets_interfaces.find(type_name);
 	if (found == assets_interfaces.end()) return Ks_IAsset{0};
 	return found->second;
@@ -484,7 +484,7 @@ bool AssetManager_Impl::reload_asset(Ks_Handle handle) {
         source_path = entry.source_path;
         old_data = entry.data;
     } 
-	
+
     auto it = assets_interfaces.find(type_name);
     if (it == assets_interfaces.end() || !it->second.load_from_file_fn) {
         return false;
