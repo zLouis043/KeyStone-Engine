@@ -109,7 +109,7 @@ AssetManager_Impl::~AssetManager_Impl() {
     }
 
     std::lock_guard<std::mutex> lock(assets_mutex);
-    std::map<std::string, Ks_IAsset> interfaces_copy = assets_interfaces;
+    std::unordered_map<std::string, Ks_IAsset> interfaces_copy = assets_interfaces;
     
     for (auto& [handle, entry] : assets_entries) {
         if (entry.data) {
