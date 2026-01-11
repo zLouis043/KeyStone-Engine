@@ -26,7 +26,7 @@ Ks_AssetData text_load_file(ks_str file_path) {
         in.read(asset->content, 63);
     }
     else {
-        strcpy(asset->content, "ERROR");
+        memcpy(asset->content, "ERROR", 6);
     }
     return (Ks_AssetData)asset;
 }

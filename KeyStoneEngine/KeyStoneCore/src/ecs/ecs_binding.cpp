@@ -5,6 +5,7 @@
 #include <string.h>
 #include <vector>
 #include <string>
+#include <string.h>
 #include <mutex>
 #include <unordered_set>
 #include <map>
@@ -171,7 +172,7 @@ static ks_returns_count l_ecs_Component(Ks_Script_Ctx ctx) {
             "ScriptCleanupCtx"
         );
         clean_ctx->ctx = ctx;
-        strncpy(clean_ctx->type_name, name, 63);
+        memcpy(clean_ctx->type_name, name, 63);
         clean_ctx->type_name[63] = '\0';
 
         ks_ecs_create_observer(world, KS_EVENT_ON_REMOVE, name,

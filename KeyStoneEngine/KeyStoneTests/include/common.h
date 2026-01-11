@@ -3,6 +3,7 @@
 #include <keystone.h>
 #include <string.h>
 #include <string>
+#include <string.h>
 #include <vector>
 #include <new>
 #include <cstddef>
@@ -27,11 +28,11 @@ inline Ks_AssetData my_asset_load_file(ks_str file_path) {
     asset->id = 100;
     asset->value = 3.14f;
     if (file_path) {
-        strncpy(asset->name, file_path, 127);
+        memcpy(asset->name, file_path, 127);
         asset->name[127] = '\0';
     }
     else {
-        strcpy(asset->name, "Unknown");
+        memcpy(asset->name, "Unknown", 8);
     }
     return (Ks_AssetData)asset;
 }
