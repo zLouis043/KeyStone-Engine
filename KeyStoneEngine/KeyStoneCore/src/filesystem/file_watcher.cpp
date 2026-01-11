@@ -74,7 +74,7 @@ private:
 };
 
 KS_API Ks_FileWatcher ks_file_watcher_create() {
-    return new (ks_alloc(sizeof(FileWatcher_Impl), KS_LT_PERMANENT, KS_TAG_INTERNAL_DATA)) FileWatcher_Impl();
+    return new (ks_alloc(sizeof(FileWatcher_Impl), KS_LT_USER_MANAGED, KS_TAG_INTERNAL_DATA)) FileWatcher_Impl();
 }
 
 KS_API ks_no_ret ks_file_watcher_destroy(Ks_FileWatcher watcher) {

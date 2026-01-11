@@ -106,9 +106,6 @@ AssetManager_Impl::AssetManager_Impl()
 
 AssetManager_Impl::~AssetManager_Impl() {
 	if (file_watcher) {
-		// Disabilita callback prima di distruggere per evitare race conditions
-		// ks_file_watcher_stop(file_watcher); // Se esistesse una API simile
-
 		for (auto& [handle, entry] : assets_entries) {
 			if (!entry.source_path.empty()) {
 				ks_file_watcher_unwatch_file(file_watcher, entry.source_path.c_str());
@@ -489,8 +486,8 @@ bool AssetManager_Impl::reload_asset(Ks_Handle handle) {
 		old_data = entry.data;
 	}
 
-	// 2. Carichiamo la nuova risorsa SENZA LOCK (perché può essere lento e può richiamare lock)
-	// FIX DEADLOCK: Usiamo get_asset_interface che è safe o accediamo direttamente se avessimo accesso.
+	// 2. Carichiamo la nuova risorsa SENZA LOCK (perchï¿½ puï¿½ essere lento e puï¿½ richiamare lock)
+	// FIX DEADLOCK: Usiamo get_asset_interface che ï¿½ safe o accediamo direttamente se avessimo accesso.
 	// Ma qui dobbiamo trovare l'interfaccia. Facciamo lock per trovare interfaccia, poi unlock.
 
 	Ks_IAsset iface;
@@ -511,7 +508,7 @@ bool AssetManager_Impl::reload_asset(Ks_Handle handle) {
 		std::lock_guard<std::mutex> lock(assets_mutex);
 		auto found = assets_entries.find(handle);
 		if (found == assets_entries.end()) {
-			// L'asset è stato rilasciato mentre caricavamo?
+			// L'asset ï¿½ stato rilasciato mentre caricavamo?
 			if (iface.destroy_fn) iface.destroy_fn(new_data);
 			return false;
 		}
