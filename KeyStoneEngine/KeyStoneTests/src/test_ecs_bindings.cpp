@@ -24,11 +24,28 @@ struct Health {
     int max_hp;
 };
 
+void pos_init(Position* self) {
+    self->x = 0; self->y = 0;
+}
+
+void pos_init_fill(Position* self, float val) {
+    self->x = val; self->y = val;
+}
+
+void pos_init_set(Position* self, float x, float y) {
+    self->x = x; self->y = y;
+}
+
 void register_ecs_structs_reflection() {
     if (!ks_reflection_get_type(ks_type_id(Position))) {
         ks_reflect_struct(Position,
             ks_reflect_field(float, x),
-            ks_reflect_field(float, y)
+            ks_reflect_field(float, y),
+            ks_reflect_vtable_begin(Position),
+            ks_reflect_constructor(pos_init, ks_no_args()),
+            ks_reflect_constructor(pos_init_fill, ks_args(ks_arg(float, val))),
+            ks_reflect_constructor(pos_init_set, ks_args(ks_arg(float, x), ks_arg(float, y))),
+            ks_reflect_vtable_end()
         );
     }
 
@@ -67,9 +84,7 @@ TEST_CASE("Bindings: ECS Integration") {
         const char* script = R"(
             local e = ecs.Entity("Hero")
 
-            local pos = Position()
-            pos.x = 10.0
-            pos.y = 20.0
+            local pos = Position(10, 20)
             
             e:add(pos)
             
@@ -124,14 +139,14 @@ TEST_CASE("Bindings: ECS Integration") {
                 Position()
             })
             
-            local grunt = ecs.create_instance("OrcBase")
+            local grunt = ecs.instantiate("OrcBase")
             local info = grunt:get("OrcInfo")
             
             if info.rank ~= 1 then return -1 end
             
             info.rank = 2
             
-            local grunt2 = ecs.create_instance("OrcBase")
+            local grunt2 = ecs.instantiate("OrcBase")
             if grunt2:get("OrcInfo").rank ~= 1 then return -2 end
             
             return 1
@@ -197,8 +212,121 @@ TEST_CASE("Bindings: ECS Integration") {
         CHECK(total_growth < 20000);
     }
 
-    for (int k = 0; k < 10; k++) {
-    ks_script_gc_collect(ctx);
+    SUBCASE("Advanced Features: Hierarchy, Prefabs, Observers") {
+        ks_script_begin_scope(ctx);
+        const char* script = R"(            
+            local my_prefab = ecs.Prefab("EnemyPrefab", {
+                Position(10, 20)
+            })
+            
+            local instance = ecs.instantiate(my_prefab)
+            local pos = instance:get("Position")
+
+            if (pos.x ~= 10 or pos.y ~= 20) then 
+                error('Prefab instantiation failed. Expected (10, 20), Got (' .. tostring(pos.x) .. ', ' .. tostring(pos.y) .. ')')
+            end
+            
+            local child = ecs.Entity("Child")
+            instance:add_child(child)
+            
+            local parent = child:parent()
+            if not parent then error("Hierarchy parent failed") end
+
+            local obs_triggered = false
+            
+            ecs.Observer("OnSet", "Position", function(e)
+                obs_triggered = true
+            end)
+            
+            instance:add(Position(50))
+            
+            return obs_triggered
+        )";
+
+        Ks_Script_Function_Call_Result res = ks_script_do_cstring(ctx, script);
+
+        if (!ks_script_call_succeded(ctx, res)) {
+            FAIL(ks_script_get_last_error_str(ctx));
+        }
+
+        CHECK(ks_script_obj_as_boolean(ctx, ks_script_call_get_return(ctx, res)) == true);
+
+        ks_script_end_scope(ctx);
+    }
+
+    SUBCASE("Systems, Phases & Queries") {
+        ks_script_begin_scope(ctx);
+
+        const char* setup_script = R"(
+            TagA = ecs.Component("TagA")
+            TagB = ecs.Component("TagB")
+            Val  = ecs.Component("Val", { v = 0 })
+
+            execution_log = ""
+
+            ecs.System("SysPre", "PreUpdate", "Val", function(e)
+                execution_log = execution_log .. "PRE|"
+            end)
+
+            ecs.System("SysUpdate", "OnUpdate", "Val", function(e)
+                execution_log = execution_log .. "UPD|"
+                local data = e:get("Val")
+                data.v = data.v + 1
+            end)
+
+            ecs.System("SysPost", "PostUpdate", "Val", function(e)
+                execution_log = execution_log .. "PST"
+            end)
+
+            function run_query_checks()
+                local count_a = 0
+                local count_ab = 0
+                
+                ecs.Query("TagA", function(e) 
+                    count_a = count_a + 1 
+                end)
+
+                ecs.Query("TagA, TagB", function(e) 
+                    count_ab = count_ab + 1 
+                end)
+
+                return count_a, count_ab
+            end
+
+            function get_log() return execution_log end
+        )";
+
+        ks_script_do_cstring(ctx, setup_script);
+
+        ks_script_do_cstring(ctx, "sys_ent = ecs.Entity('SysEnt', { Val{v=0} })");
+
+        ks_script_do_cstring(ctx, "e1 = ecs.Entity('E1', { TagA{} })");
+        ks_script_do_cstring(ctx, "e2 = ecs.Entity('E2', { TagA{}, TagB{} })");
+        ks_script_do_cstring(ctx, "e3 = ecs.Entity('E3', { TagB{} })");
+
+        ks_ecs_progress(world, 0.016f);
+
+        Ks_Script_Function_Call_Result res = ks_script_do_cstring(ctx, "return get_log()");
+        Ks_Script_Object log_res = ks_script_call_get_return(ctx, res);
+        const char* log_str = ks_script_obj_as_cstring(ctx, log_res);
+
+        CHECK(strcmp(log_str, "PRE|UPD|PST") == 0);
+
+        res = ks_script_do_cstring(ctx, "return sys_ent:get('Val').v");
+        int val = (int)ks_script_obj_as_integer(ctx, ks_script_call_get_return(ctx, res));
+        CHECK(val == 1);
+
+        ks_script_do_cstring(ctx, "return run_query_checks()");
+
+        res = ks_script_do_cstring(ctx, "c_a, c_ab = run_query_checks(); return c_a");
+        int count_a = (int)ks_script_obj_as_integer(ctx, ks_script_call_get_return(ctx, res));
+        CHECK(count_a == 2);
+
+        res = ks_script_do_cstring(ctx, "c_a, c_ab = run_query_checks(); return c_ab");
+        int count_ab = (int)ks_script_obj_as_integer(ctx, ks_script_call_get_return(ctx, res));
+        CHECK(count_ab == 1);
+
+        ks_script_end_scope(ctx);
     }
 
     ks_ecs_lua_shutdown(world);

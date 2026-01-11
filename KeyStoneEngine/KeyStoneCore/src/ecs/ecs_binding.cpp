@@ -24,10 +24,46 @@ struct ScriptCleanupCtx {
     char type_name[64];
 };
 
-static std::mutex s_script_types_mutex;
+struct LuaCallbackCtx {
+    Ks_Script_Ctx ctx;
+    int function_ref;
+};
+
+static std::mutex s_binding_mutex;
 static std::vector<std::string> s_script_component_types;
 static std::unordered_set<std::string> g_registered_observers;
 static std::vector<ScriptCleanupCtx*> s_cleanup_contexts;
+static std::vector<LuaCallbackCtx*> s_callback_contexts;
+
+static bool is_script_component(const char* name) {
+    std::lock_guard<std::mutex> lock(s_binding_mutex);
+    for (const auto& s : s_script_component_types) {
+        if (s == name) return true;
+    }
+    return false;
+}
+
+static void lua_ecs_callback_thunk(Ks_Ecs_World world, Ks_Entity entity, void* user_data) {
+    LuaCallbackCtx* cb_ctx = (LuaCallbackCtx*)user_data;
+    if (!cb_ctx) return;
+
+    Ks_Script_Ctx ctx = cb_ctx->ctx;
+
+    Ks_Script_Function func_obj;
+    func_obj.type = KS_TYPE_SCRIPT_FUNCTION;
+    func_obj.state = KS_SCRIPT_OBJECT_VALID;
+    func_obj.val.function_ref = cb_ctx->function_ref;
+
+    Ks_Script_Userdata ud = ks_script_create_usertype_instance(ctx, "EntityHandle");
+    if (ud.state == KS_SCRIPT_OBJECT_VALID) {
+        EntityHandle* handle_ptr = (EntityHandle*)ks_script_usertype_get_ptr(ctx, ud);
+        handle_ptr->world = world;
+        handle_ptr->id = entity;
+        ks_script_stack_push_obj(ctx, ud);
+        ks_script_func_call(ctx, func_obj, 1, 0);
+        ks_script_free_obj(ctx, ud);
+    }
+}
 
 static void on_script_component_remove(Ks_Ecs_World w, Ks_Entity e, void* user_data) {
     ScriptCleanupCtx* clean_ctx = (ScriptCleanupCtx*)user_data;
@@ -49,12 +85,17 @@ static void on_script_component_remove(Ks_Ecs_World w, Ks_Entity e, void* user_d
 }
 
 KS_API ks_no_ret ks_ecs_lua_shutdown(Ks_Ecs_World world) {
-    std::lock_guard<std::mutex> lock(s_script_types_mutex);
+    std::lock_guard<std::mutex> lock(s_binding_mutex);
 
     for (auto* ctx_ptr : s_cleanup_contexts) {
         ks_dealloc(ctx_ptr);
     }
     s_cleanup_contexts.clear();
+
+    for (auto* ctx : s_callback_contexts) {
+        ks_dealloc(ctx);
+    }
+    s_callback_contexts.clear();
 
     s_script_component_types.clear();
     g_registered_observers.clear();
@@ -205,7 +246,7 @@ static ks_returns_count l_ecs_Component(Ks_Script_Ctx ctx) {
     }
 
     {
-        std::lock_guard<std::mutex> lock(s_script_types_mutex);
+        std::lock_guard<std::mutex> lock(s_binding_mutex);
         s_script_component_types.push_back(name);
     }
 
@@ -280,7 +321,7 @@ static ks_returns_count l_ecs_create_instance(Ks_Script_Ctx ctx) {
         {
             std::vector<std::string> types_to_check;
             {
-                std::lock_guard<std::mutex> lock(s_script_types_mutex);
+                std::lock_guard<std::mutex> lock(s_binding_mutex);
                 types_to_check = s_script_component_types;
             }
 
@@ -382,7 +423,7 @@ static ks_returns_count l_entity_destroy(Ks_Script_Ctx ctx) {
 
     if (ks_ecs_is_alive(ent->world, ent->id)) {
         {
-            std::lock_guard<std::mutex> lock(s_script_types_mutex);
+            std::lock_guard<std::mutex> lock(s_binding_mutex);
 
             for (const auto& type_name : s_script_component_types) {
                 if (ks_ecs_has_component(ent->world, ent->id, type_name.c_str())) {
@@ -406,6 +447,132 @@ static ks_returns_count l_entity_destroy(Ks_Script_Ctx ctx) {
     return 0;
 }
 
+static int l_entity_add_child(Ks_Script_Ctx ctx) {
+    auto* parent = (EntityHandle*)ks_script_get_self(ctx);
+    Ks_Script_Object child_obj = ks_script_get_arg(ctx, 1);
+
+    const char* type = ks_script_usertype_get_name(ctx, child_obj);
+    if (parent && type && strcmp(type, "EntityHandle") == 0) {
+        EntityHandle* child = (EntityHandle*)ks_script_usertype_get_ptr(ctx, child_obj);
+        if (child && child->id) {
+            ks_ecs_add_child(parent->world, parent->id, child->id);
+        }
+    }
+    return 0;
+}
+
+static int l_entity_remove_child(Ks_Script_Ctx ctx) {
+    auto* parent = (EntityHandle*)ks_script_get_self(ctx);
+    Ks_Script_Object child_obj = ks_script_get_arg(ctx, 1);
+
+    const char* type = ks_script_usertype_get_name(ctx, child_obj);
+    if (parent && type && strcmp(type, "EntityHandle") == 0) {
+        EntityHandle* child = (EntityHandle*)ks_script_usertype_get_ptr(ctx, child_obj);
+        if (child && child->id) {
+            ks_ecs_remove_child(parent->world, parent->id, child->id);
+        }
+    }
+    return 0;
+}
+
+static int l_entity_get_parent(Ks_Script_Ctx ctx) {
+    auto* child = (EntityHandle*)ks_script_get_self(ctx);
+    if (!child || !child->id) return 0;
+
+    Ks_Entity parent_id = ks_ecs_get_parent(child->world, child->id);
+    if (parent_id == 0) return 0;
+
+    Ks_Script_Userdata ud = ks_script_create_usertype_instance(ctx, "EntityHandle");
+    auto* handle = (EntityHandle*)ks_script_usertype_get_ptr(ctx, ud);
+    handle->world = child->world;
+    handle->id = parent_id;
+
+    ks_script_stack_push_obj(ctx, ud);
+    return 1;
+}
+
+static Ks_Entity get_phase_entity(const char* name) {
+    if (strcmp(name, "OnLoad") == 0) return KS_PHASE_ON_LOAD;
+    if (strcmp(name, "PostLoad") == 0) return KS_PHASE_POST_LOAD;
+    if (strcmp(name, "PreUpdate") == 0) return KS_PHASE_PRE_UPDATE;
+    if (strcmp(name, "OnUpdate") == 0) return KS_PHASE_ON_UPDATE;
+    if (strcmp(name, "PostUpdate") == 0) return KS_PHASE_POST_UPDATE;
+    if (strcmp(name, "PreStore") == 0) return KS_PHASE_PRE_STORE;
+    if (strcmp(name, "OnStore") == 0) return KS_PHASE_ON_STORE;
+    return KS_PHASE_ON_UPDATE;
+}
+
+static int l_ecs_system(Ks_Script_Ctx ctx) {
+    const char* name = ks_script_obj_as_cstring(ctx, ks_script_get_arg(ctx, 1));
+    const char* phase_name = ks_script_obj_as_cstring(ctx, ks_script_get_arg(ctx, 2));
+    const char* signature = ks_script_obj_as_cstring(ctx, ks_script_get_arg(ctx, 3));
+    Ks_Script_Function callback = ks_script_obj_as_function(ctx, ks_script_get_arg(ctx, 4));
+
+    Ks_Script_Object world_ud = ks_script_func_get_upvalue(ctx, 1);
+    Ks_Ecs_World world = (Ks_Ecs_World)ks_script_lightuserdata_get_ptr(ctx, static_cast<Ks_Script_LightUserdata>(world_ud));
+
+    if (!world || !name || callback.state == KS_SCRIPT_OBJECT_INVALID) return 0;
+
+    LuaCallbackCtx* cb_ctx = (LuaCallbackCtx*)ks_alloc(sizeof(LuaCallbackCtx), KS_LT_PERMANENT, KS_TAG_SCRIPT);
+    cb_ctx->ctx = ctx;
+    cb_ctx->function_ref = ks_script_ref_obj(ctx, callback).val.function_ref;
+
+    {
+        std::lock_guard<std::mutex> lock(s_binding_mutex);
+        s_callback_contexts.push_back(cb_ctx);
+    }
+
+    ks_ecs_create_system(world, name, signature, get_phase_entity(phase_name), lua_ecs_callback_thunk, cb_ctx);
+    return 0;
+}
+
+static int l_ecs_observer(Ks_Script_Ctx ctx) {
+    const char* evt_name = ks_script_obj_as_cstring(ctx, ks_script_get_arg(ctx, 1));
+    const char* signature = ks_script_obj_as_cstring(ctx, ks_script_get_arg(ctx, 2));
+    Ks_Script_Function callback = ks_script_obj_as_function(ctx, ks_script_get_arg(ctx, 3));
+
+    Ks_Script_Object world_ud = ks_script_func_get_upvalue(ctx, 1);
+    Ks_Ecs_World world = (Ks_Ecs_World)ks_script_lightuserdata_get_ptr(ctx, static_cast<Ks_Script_LightUserdata>(world_ud));
+
+    if (!world || !evt_name || callback.state == KS_SCRIPT_OBJECT_INVALID) return 0;
+
+    Ks_Ecs_Event evt = KS_EVENT_ON_SET;
+    if (strcmp(evt_name, "OnAdd") == 0) evt = KS_EVENT_ON_ADD;
+    else if (strcmp(evt_name, "OnRemove") == 0) evt = KS_EVENT_ON_REMOVE;
+
+    LuaCallbackCtx* cb_ctx = (LuaCallbackCtx*)ks_alloc(sizeof(LuaCallbackCtx), KS_LT_PERMANENT, KS_TAG_SCRIPT);
+    cb_ctx->ctx = ctx;
+    cb_ctx->function_ref = ks_script_ref_obj(ctx, callback).val.function_ref;
+
+    {
+        std::lock_guard<std::mutex> lock(s_binding_mutex);
+        s_callback_contexts.push_back(cb_ctx);
+    }
+
+    ks_ecs_create_observer(world, evt, signature, lua_ecs_callback_thunk, cb_ctx);
+    return 0;
+}
+
+static int l_ecs_query(Ks_Script_Ctx ctx) {
+    const char* signature = ks_script_obj_as_cstring(ctx, ks_script_get_arg(ctx, 1));
+    Ks_Script_Function callback = ks_script_obj_as_function(ctx, ks_script_get_arg(ctx, 2));
+
+    Ks_Script_Object world_ud = ks_script_func_get_upvalue(ctx, 1);
+    Ks_Ecs_World world = (Ks_Ecs_World)ks_script_lightuserdata_get_ptr(ctx, static_cast<Ks_Script_LightUserdata>(world_ud));
+
+    if (!world || !signature || callback.state == KS_SCRIPT_OBJECT_INVALID) return 0;
+
+    LuaCallbackCtx cb_ctx;
+    cb_ctx.ctx = ctx;
+
+    Ks_Script_Object ref_obj = ks_script_ref_obj(ctx, callback);
+    cb_ctx.function_ref = ref_obj.val.function_ref;
+
+    ks_ecs_run_query(world, signature, lua_ecs_callback_thunk, &cb_ctx);
+
+    ks_script_free_obj(ctx, ref_obj);
+    return 0;
+}
 
 KS_API ks_no_ret ks_ecs_lua_bind(Ks_Ecs_World world, Ks_Script_Ctx ctx) {
     Ks_Script_Usertype_Builder b = ks_script_usertype_begin(ctx, "EntityHandle", sizeof(EntityHandle));
@@ -419,17 +586,18 @@ KS_API ks_no_ret ks_ecs_lua_bind(Ks_Ecs_World world, Ks_Script_Ctx ctx) {
     ks_script_usertype_add_method(b, "has", KS_SCRIPT_FUNC(l_entity_has, KS_TYPE_CSTRING));
     ks_script_usertype_add_method(b, "destroy", KS_SCRIPT_FUNC_VOID(l_entity_destroy));
 
+    ks_script_usertype_add_method(b, "add_child", KS_SCRIPT_FUNC(l_entity_add_child, KS_TYPE_USERDATA));
+    ks_script_usertype_add_method(b, "remove_child", KS_SCRIPT_FUNC(l_entity_remove_child, KS_TYPE_USERDATA));
+    ks_script_usertype_add_method(b, "parent", KS_SCRIPT_FUNC_VOID(l_entity_get_parent));
+
     ks_script_usertype_end(b);
 
     Ks_Script_Table ecs_table = ks_script_create_named_table(ctx, "ecs");
 
     auto register_ecs_func = [&](const char* name, ks_script_cfunc f) {
         ks_script_stack_push_obj(ctx, ks_script_create_lightuserdata(ctx, world));
-
         Ks_Script_Sig_Def sig = { f, nullptr, 0 };
-
         Ks_Script_Function func = ks_script_create_cfunc_with_upvalues(ctx, &sig, 1, 1);
-
         Ks_Script_Object key = ks_script_create_cstring(ctx, name);
         ks_script_table_set(ctx, ecs_table, key, func);
     };
@@ -437,5 +605,8 @@ KS_API ks_no_ret ks_ecs_lua_bind(Ks_Ecs_World world, Ks_Script_Ctx ctx) {
     register_ecs_func("Entity", l_ecs_Entity);
     register_ecs_func("Prefab", l_ecs_Prefab);
     register_ecs_func("Component", l_ecs_Component);
-    register_ecs_func("create_instance", l_ecs_create_instance);
+    register_ecs_func("instantiate", l_ecs_create_instance);
+    register_ecs_func("System", l_ecs_system);
+    register_ecs_func("Observer", l_ecs_observer);
+    register_ecs_func("Query", l_ecs_query);
 }
