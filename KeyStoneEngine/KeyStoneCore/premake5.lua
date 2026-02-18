@@ -8,9 +8,9 @@ project("KeyStoneCore")
 	objdir("../build/obj/%{cfg.buildcfg}")
 
 	files({
-		"**.h",
-		"**.hpp",
-		"**.cpp",
+		--"**.h",
+		--"**.hpp",
+		--"**.cpp",
 		"./include/**.h",
 		"./include/**.hpp",
 		"./include/**.inl",

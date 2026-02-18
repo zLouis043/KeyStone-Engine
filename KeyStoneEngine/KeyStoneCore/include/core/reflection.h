@@ -39,6 +39,10 @@ extern "C" {
         const char* name;
     } Ks_Arg_Def;
 
+    typedef enum {
+        KS_REFLECTION_TYPE_NOT_FOUND
+    }Ks_Reflection_Error;
+
 #ifdef __cplusplus
 }
 #include <stdio.h>

@@ -4,6 +4,12 @@ echo "=========================================="
 echo "    KeyStone Engine - Linux Setup"
 echo "=========================================="
 
+echo "[0/3] Updating Git Submodules..."
+git submodule update --init --recursive
+if [ $? -ne 0 ]; then
+    echo "[WARNING] Git command failed. Ensure Git is installed and in PATH."
+fi
+
 echo "[1/3] Checking Premake5..."
 if ! command -v premake5 &> /dev/null; then
     echo "[ERROR] premake5 could not be found!"
@@ -47,6 +53,7 @@ chmod +x bootstrap-vcpkg.sh
 ./vcpkg install rapidjson
 ./vcpkg install flecs
 ./vcpkg install doctest
+./vcpkg install pegtl
 popd > /dev/null
 
 echo ""

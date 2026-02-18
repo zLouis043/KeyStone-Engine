@@ -1,6 +1,7 @@
 #include "../../include/script/script_env.h"
 #include "../../include/memory/memory.h"
 #include "../../include/core/log.h"
+#include "../../include/core/error.h"
 #include "../../include/core/types_binding.h"
 #include "../../include/event/events_binding.h"
 #include "../../include/asset/assets_binding.h"
@@ -70,8 +71,9 @@ struct ScriptEnv_Impl {
         ks_dealloc((void*)filename);
 
         if (!ks_script_obj_is_valid(ctx, chunk)) {
-            ks_str err = ks_script_get_last_error_str(ctx);
+            ks_str err = ks_error_get_last_error().message;
             ks_script_stack_push_cstring(ctx, err ? err : "Unknown load error");
+            ks_error_pop_last();
             return 1;
         }
 
@@ -94,7 +96,8 @@ struct ScriptEnv_Impl {
         if (path == entry_script_path) {
             auto res = ks_script_do_file(script_ctx, path.c_str());
             if (!ks_script_call_succeded(script_ctx, res)) {
-                KS_LOG_ERROR("ScriptEnv: Reload Error: %s", ks_script_get_last_error_str(script_ctx));
+                KS_LOG_ERROR("ScriptEnv: Reload Error: %s", ks_error_get_last_error().message);
+                ks_error_pop_last();
             }
             return;
         }
@@ -128,7 +131,8 @@ struct ScriptEnv_Impl {
 
         auto res = ks_script_do_file(script_ctx, path);
         if (!ks_script_call_succeded(script_ctx, res)) {
-            KS_LOG_ERROR("ScriptEnv: Entry script error: %s", ks_script_get_last_error_str(script_ctx));
+            KS_LOG_ERROR("ScriptEnv: Entry script error: %s", ks_error_get_last_error().message);
+            ks_error_pop_last();
         }
     }
 

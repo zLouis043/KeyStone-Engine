@@ -246,7 +246,7 @@ TEST_CASE("Bindings: ECS Integration") {
         Ks_Script_Function_Call_Result res = ks_script_do_cstring(ctx, script);
 
         if (!ks_script_call_succeded(ctx, res)) {
-            FAIL(ks_script_get_last_error_str(ctx));
+            FAIL(ks_error_get_last_error().message);
         }
 
         CHECK(ks_script_obj_as_boolean(ctx, ks_script_call_get_return(ctx, res)) == true);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "./script_engine.h"
+#include "./script_preprocess.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -66,6 +67,7 @@ public:
 		}
 	{
 		p_scopes.emplace_back();
+		p_preprocessor = ks_preprocessor_create(this);
 	}
 
 	~KsScriptEngineCtx() {
@@ -77,6 +79,7 @@ public:
 			ks_dealloc((void*)p_error_info.message);
 		}
 
+		ks_preprocessor_destroy(p_preprocessor);
 		lua_close(p_state);
 	}
 
@@ -102,6 +105,8 @@ public:
 	}
 
 	lua_State* get_raw_state() { return p_state;  }
+
+	Ks_Preprocessor get_preproc() { return p_preprocessor; }
 
 	ks_no_ret set_raw_state(lua_State* state) {
 		p_state = state;
@@ -200,6 +205,7 @@ private:
 
 private:
 	lua_State* p_state = nullptr;
+	Ks_Preprocessor p_preprocessor;
 	Ks_Script_Error_Info p_error_info;
 	
 	std::vector<CallFrame> p_call_stack;

@@ -2,6 +2,8 @@
 #include "../../include/script/script_engine_internal.h"
 #include "../../include/memory/memory.h"
 #include "../../include/core/log.h"
+#include "../../include/core/error.h"
+#include "../../include/core/core_errors.h"
 #include "../../include/core/reflection.h"
 #include "../../include/profiler/profiler.h"
 
@@ -12,6 +14,7 @@ extern "C" {
     #include <lauxlib.h>
     #include <lualib.h>
     #include <ffi.h>
+    int luaopen_yue(lua_State* L);
 #ifdef __cplusplus
 }
 #endif
@@ -27,6 +30,11 @@ extern "C" {
 #include <vector>
 #include <map>
 #include <stdarg.h>
+
+#include <filesystem>
+#include <fstream>
+#include <sstream>
+#include <unordered_map>
 
 static char KS_CTX_REGISTRY_KEY = 0;
 
@@ -51,7 +59,7 @@ union FFIArgValue {
 };
 
 static void* lua_custom_Alloc(void* ud, void* ptr, size_t osize, size_t nsize);
-static void set_script_error(KsScriptEngineCtx* ctx, Ks_Script_Error error, const char* function, const char* details);
+static int internal_load_buffer(Ks_Script_Ctx ctx, const char* buff, size_t sz, const char* name);
 static ks_str ks_metamethod_to_str(Ks_Script_Metamethod mt);
 static int usertype_gc_thunk(lua_State* L);
 static int usertype_index_thunk(lua_State* L);
@@ -76,12 +84,181 @@ static int default_auto_constructor_thunk(lua_State* L);
 static void chain_usertype_tables(lua_State* L, int child_idx, const std::string& base_name, const char* table_suffix);
 static int ks_script_error_handler(lua_State* L);
 
-#define SET_SCRIPT_ERROR(ctx, error, ...) \
-    do { \
-        char buffer[1024]; \
-        snprintf(buffer, sizeof(buffer), __VA_ARGS__); \
-        set_script_error(ctx, error, __FUNCTION__, buffer); \
-    } while(0)
+ks_returns_count sb_append(Ks_Script_Ctx ctx) {
+    ks_ptr self = ks_script_get_self(ctx);
+    Ks_Script_Object text_o = ks_script_get_arg(ctx, 1);
+
+    if (!ks_script_obj_is(ctx, text_o, KS_TYPE_CSTRING)) {
+        ks_script_stack_push_obj(ctx, ks_script_create_nil(ctx));
+        return 0;
+    }
+
+    ks_str string = ks_script_obj_as_string_view(ctx, text_o);
+
+    ks_sb_append(self, string);
+    return 0;
+}
+
+struct LuaMacroHooks {
+    Ks_Script_Ref onDef = KS_SCRIPT_NO_REF;
+    Ks_Script_Ref onGet = KS_SCRIPT_NO_REF;
+    Ks_Script_Ref onSet = KS_SCRIPT_NO_REF;
+    Ks_Script_Ref onCall = KS_SCRIPT_NO_REF;
+};
+
+enum {
+    MACRO_ON_DEF = 0,
+    MACRO_ON_GET,
+    MACRO_ON_SET,
+    MACRO_ON_CALL
+};
+
+void push_preproc_ctx_to_lua(Ks_Script_Ctx ctx, const Ks_Preproc_Ctx* pp_ctx) {
+    Ks_Script_Table t = ks_script_create_table(ctx);
+    ks_script_begin_scope(ctx);
+    ks_script_table_set(ctx, t, ks_script_create_cstring(ctx, "symbol"), ks_script_create_cstring(ctx, pp_ctx->symbol_name));
+
+    if (pp_ctx->decorator_args_count > 0) {
+        Ks_Script_Table args_t = ks_script_create_table(ctx);
+        for (size_t i = 0; i < pp_ctx->decorator_args_count; ++i) {
+            Ks_Script_Object key = (pp_ctx->decorator_arg_keys && pp_ctx->decorator_arg_keys[i])
+                ? ks_script_create_cstring(ctx, pp_ctx->decorator_arg_keys[i])
+                : ks_script_create_integer(ctx, i + 1);
+
+            ks_script_table_set(ctx, args_t, key, ks_script_create_cstring(ctx, pp_ctx->decorator_args[i]));
+        }
+        ks_script_table_set(ctx, t, ks_script_create_cstring(ctx, "args"), args_t);
+    }
+
+    if (pp_ctx->assignment_value) {
+        ks_script_table_set(ctx, t, ks_script_create_cstring(ctx, "value"), ks_script_create_cstring(ctx, pp_ctx->assignment_value));
+    }
+
+    if (pp_ctx->is_func_def) {
+        ks_script_table_set(ctx, t, ks_script_create_cstring(ctx, "body"), ks_script_create_cstring(ctx, pp_ctx->function_body));
+        if (pp_ctx->function_args_count > 0) {
+            Ks_Script_Table args_t = ks_script_create_table(ctx);
+            for (int i = 0; i < pp_ctx->function_args_count; i++) {
+                ks_script_table_set(ctx, args_t, ks_script_create_integer(ctx, i + 1), ks_script_create_cstring(ctx, pp_ctx->decorator_args[i]));
+            }
+            ks_script_table_set(ctx, t, ks_script_create_cstring(ctx, "func_args"), args_t);
+        }
+
+    }
+    ks_script_end_scope(ctx);
+    ks_script_stack_push_obj(ctx, t);
+}
+
+
+
+static std::unordered_map<std::string, LuaMacroHooks> g_lua_macros;
+
+ks_bool lua_macro_trampoline(const Ks_Preproc_Ctx* ctx, Ks_StringBuilder* out, int type) {
+    auto it = g_lua_macros.find(ctx->decorator_name);
+    if (it == g_lua_macros.end()) return ks_false;
+
+    const LuaMacroHooks& hooks = it->second;
+    Ks_Script_Ref func_ref = KS_SCRIPT_NO_REF;
+
+    switch (type) {
+    case MACRO_ON_DEF: func_ref = hooks.onDef; break;
+    case MACRO_ON_SET: func_ref = hooks.onSet; break;
+    case MACRO_ON_GET: func_ref = hooks.onGet; break;
+    case MACRO_ON_CALL: func_ref = hooks.onCall; break;
+    }
+
+    if (func_ref == KS_SCRIPT_NO_REF) return ks_false;
+
+    Ks_Script_Ctx sctx = (Ks_Script_Ctx)ctx->lua_ctx;
+    ks_script_begin_scope(sctx);
+
+    Ks_Script_Function func_obj;
+    func_obj.type = KS_TYPE_SCRIPT_FUNCTION;
+    func_obj.state = KS_SCRIPT_OBJECT_VALID;
+    func_obj.val.function_ref = func_ref;
+
+    push_preproc_ctx_to_lua(sctx, ctx);
+
+    Ks_Script_Userdata sb_ud = ks_script_create_usertype_ref(sctx, "StringBuilder", out);
+    ks_script_stack_push_obj(sctx, sb_ud);
+
+    ks_script_func_call(sctx, func_obj, 2, 1);
+
+    Ks_Script_Object res = ks_script_stack_pop_obj(sctx);
+    bool ret = ks_script_obj_as_boolean_or(sctx, res, false);
+
+    ks_script_end_scope(sctx);
+    return ret;
+}
+
+ks_bool lua_on_def(const Ks_Preproc_Ctx* ctx, Ks_StringBuilder* out) { return lua_macro_trampoline(ctx, out, MACRO_ON_DEF); }
+ks_bool lua_on_get(const Ks_Preproc_Ctx* ctx, Ks_StringBuilder* out) { return lua_macro_trampoline(ctx, out, MACRO_ON_GET); }
+ks_bool lua_on_set(const Ks_Preproc_Ctx* ctx, Ks_StringBuilder* out) { return lua_macro_trampoline(ctx, out, MACRO_ON_SET); }
+ks_bool lua_on_call(const Ks_Preproc_Ctx* ctx, Ks_StringBuilder* out) { return lua_macro_trampoline(ctx, out, MACRO_ON_CALL); }
+
+ks_bool macro_symbol_def(const Ks_Preproc_Ctx* ctx, Ks_StringBuilder* out) {
+    if (!ctx->is_table_def) return ks_false;
+
+    std::stringstream ss;
+    ss << "{";
+    for (size_t i = 0; i < ctx->table_fields_count; ++i) {
+        ss << ctx->table_fields[i];
+        if (i < ctx->table_fields_count - 1) ss << ", ";
+    }
+    ss << "}";
+    std::string lua_body = ss.str();
+
+    Ks_Script_Ctx sctx = (Ks_Script_Ctx)ctx->lua_ctx;
+    std::string script = "return " + lua_body;
+
+    Ks_Script_Function_Call_Result res = ks_script_do_cstring(sctx, script.c_str());
+
+    if (!ks_script_call_succeded(sctx, res)) {
+        ks_epush(KS_ERROR_LEVEL_BASE, "ScriptEngine", "ScriptEngine", KS_SCRIPT_ERROR_RUNTIME, "Lua Macro Definition Error");
+        return ks_false;
+    }
+
+    Ks_Script_Object table = ks_script_call_get_return(sctx, res);
+
+    if (ks_script_obj_type(sctx, table) != KS_TYPE_SCRIPT_TABLE) {
+        return ks_false;
+    }
+
+    LuaMacroHooks hooks;
+
+    auto get_func_ref = [&](const char* name) -> Ks_Script_Ref {
+        Ks_Script_Object key = ks_script_create_cstring(sctx, name);
+        Ks_Script_Object func = ks_script_table_get(sctx, table, key);
+        if (ks_script_obj_type(sctx, func) == KS_TYPE_SCRIPT_FUNCTION) {
+            return ks_script_ref_obj(sctx, func).val.function_ref;
+        }
+        return KS_SCRIPT_NO_REF;
+        };
+
+    hooks.onDef = get_func_ref("onDef");
+    hooks.onGet = get_func_ref("onGet");
+    hooks.onSet = get_func_ref("onSet");
+    hooks.onCall = get_func_ref("onCall");
+
+    if (hooks.onDef == KS_SCRIPT_NO_REF && hooks.onGet == KS_SCRIPT_NO_REF &&
+        hooks.onSet == KS_SCRIPT_NO_REF && hooks.onCall == KS_SCRIPT_NO_REF) {
+        return ks_false;
+    }
+
+    g_lua_macros[ctx->symbol_name] = hooks;
+
+    KsScriptEngineCtx* engine = (KsScriptEngineCtx*)ctx->lua_ctx;
+    Ks_Preprocessor pp = engine->get_preproc();
+
+    ks_preprocessor_register(pp, ctx->symbol_name,
+        (hooks.onDef != KS_SCRIPT_NO_REF) ? lua_on_def : nullptr,
+        (hooks.onSet != KS_SCRIPT_NO_REF) ? lua_on_set : nullptr,
+        (hooks.onGet != KS_SCRIPT_NO_REF) ? lua_on_get : nullptr,
+        (hooks.onCall != KS_SCRIPT_NO_REF) ? lua_on_call : nullptr
+    );
+
+    return ks_true;
+}
 
 Ks_Script_Ctx ks_script_create_ctx() {
     KS_PROFILE_FUNCTION();
@@ -101,7 +278,34 @@ Ks_Script_Ctx ks_script_create_ctx() {
     lua_pushlightuserdata(state, (void*)&KS_CTX_REGISTRY_KEY);
     lua_pushlightuserdata(state, (void*)ctx_cpp);
     lua_settable(state, LUA_REGISTRYINDEX);
-    
+
+    ks_error_set_code_info("ScriptEngine", KS_SCRIPT_ERROR_CTX_NOT_CREATED, "Script Engine Ctx null", "Script Engine Context is not created");
+    ks_error_set_code_info("ScriptEngine", KS_SCRIPT_ERROR_MEMORY, "Script Engine Memerr", "Script Engine tried allocating memory but failed");
+    ks_error_set_code_info("ScriptEngine", KS_SCRIPT_ERROR_SYNTAX, "Script Syntax Error", "Script syntax error");
+    ks_error_set_code_info("ScriptEngine", KS_SCRIPT_ERROR_RUNTIME, "Script Runtime Error", "Script runtime error");
+    ks_error_set_code_info("ScriptEngine", KS_SCRIPT_ERROR_STACK_OVERFLOW, "Script Engine Stack Overflow", "Script engine stack overflow");
+    ks_error_set_code_info("ScriptEngine", KS_SCRIPT_ERROR_ON_LOAD, "Script Engine failed loading", "Script engine failed to load script/object");
+    ks_error_set_code_info("ScriptEngine", KS_SCRIPT_ERROR_INVALID_OPERATION, "Script invalid operation", "Attempted to make an invalid operation");
+    ks_error_set_code_info("ScriptEngine", KS_SCRIPT_ERROR_INVALID_ARGUMENT, "Script invalid argument", "Attempted to pass an invalid argument to function call");
+    ks_error_set_code_info("ScriptEngine", KS_SCRIPT_ERROR_INVALID_OBJECT, "Script invalid object", "Tried using an invalid object");
+    ks_error_set_code_info("ScriptEngine", KS_SCRIPT_ERROR_SYMBOL_NOT_FOUND, "Script symbol not found", "Unknown symbol found");
+    ks_error_set_code_info("ScriptEngine", KS_SCRIPT_ERROR_OVERLOAD_NOT_FOUND, "Script Function overload not found", "Function overload does not exist");
+    ks_error_set_code_info("ScriptEngine", KS_SCRIPT_ERROR_INVALID_USERTYPE, "Invalid usertype", "Tried using an invalid usertype");
+    ks_error_set_code_info("ScriptEngine", KS_SCRIPT_ERROR_FIELD_NOT_FOUND, "Field not found", "Tried accessing an invalid field");
+    ks_error_set_code_info("ScriptEngine", KS_SCRIPT_ERROR_PROPERTY_READONLY, "Readonly property", "Tried overwriting a readonly property");
+    ks_error_set_code_info("ScriptEngine", KS_SCRIPT_ERROR_COROUTINE_DEAD, "Dead Coroutine", "Tried resuming a dead coroutine");
+
+    auto pp = ctx->get_preproc();
+
+    ks_preprocessor_register(pp, "macro", macro_symbol_def, NULL, NULL, NULL);
+
+    Ks_Script_Ctx c = static_cast<Ks_Script_Ctx>(ctx);
+
+    auto b = ks_script_usertype_begin(c, "StringBuilder", sizeof(Ks_StringBuilder));
+    ks_script_usertype_add_method(b, "append", KS_SCRIPT_FUNC(sb_append, KS_TYPE_CSTRING));
+    ks_script_usertype_end(b);
+
+
     return static_cast<Ks_Script_Ctx>(ctx);
 }
 
@@ -349,8 +553,7 @@ KS_API Ks_Script_Userdata ks_script_create_userdata(Ks_Script_Ctx ctx, ks_size s
 
     if (size > 1024 * 1024 * 10) {
         auto* sctx = static_cast<KsScriptEngineCtx*>(ctx);
-        SET_SCRIPT_ERROR(sctx, KS_SCRIPT_ERROR_MEMORY,
-            "Userdata size too large: %zu bytes (max: 10MB)", size);
+        ks_epush_s_fmt(KS_ERROR_LEVEL_BASE, "ScriptEngine", KS_SCRIPT_ERROR_MEMORY, "Userdata size too large: %zu bytes (max: 10MB)", size);
         return ks_script_create_invalid_obj(ctx);
     }
 
@@ -360,8 +563,7 @@ KS_API Ks_Script_Userdata ks_script_create_userdata(Ks_Script_Ctx ctx, ks_size s
     lua_newuserdatauv(L, size, 0);
 
     if (lua_isnil(L, -1)) {
-        SET_SCRIPT_ERROR(sctx, KS_SCRIPT_ERROR_MEMORY,
-            "Failed to allocate userdata of size %zu", size);
+        ks_epush_s_fmt(KS_ERROR_LEVEL_BASE, "ScriptEngine", KS_SCRIPT_ERROR_MEMORY, "Failed to allocate userdata of size %zu", size);
         lua_pop(L, 1);
         return ks_script_create_invalid_obj(ctx);
     }
@@ -461,8 +663,6 @@ Ks_Script_Function_Call_Result ks_script_func_callv_impl(Ks_Script_Ctx ctx, Ks_S
     }
 
     if (lua_pcall(L, (int)args.size(), LUA_MULTRET, err_func_idx) != LUA_OK) {
-        const char* err = lua_tostring(L, -1);
-        sctx->set_internal_error(KS_SCRIPT_ERROR_RUNTIME, err);
         lua_pop(L, 2);
         return ks_script_create_invalid_obj(ctx);
     }
@@ -602,9 +802,7 @@ KS_API Ks_Script_Function_Call_Result ks_script_coroutine_resume(Ks_Script_Ctx c
 {
 
     if (!ks_script_obj_is(ctx, coroutine, KS_TYPE_SCRIPT_COROUTINE)) {
-        SET_SCRIPT_ERROR(static_cast<KsScriptEngineCtx*>(ctx),
-            KS_SCRIPT_ERROR_INVALID_OBJECT,
-            "Expected coroutine object");
+        ks_epush(KS_ERROR_LEVEL_BASE, "Core", "ScriptEngine", KS_ERROR_INVALID_ARGUMENT, "Expected coroutine object");
         return ks_script_create_invalid_obj(ctx);
     }
 
@@ -616,8 +814,7 @@ KS_API Ks_Script_Function_Call_Result ks_script_coroutine_resume(Ks_Script_Ctx c
     lua_pop(L, 1);
 
     if (!co) {
-        SET_SCRIPT_ERROR(sctx, KS_SCRIPT_ERROR_INVALID_OBJECT,
-            "Coroutine reference is invalid");
+        ks_epush_s(KS_ERROR_LEVEL_BASE, "ScriptEngine", KS_SCRIPT_ERROR_INVALID_OBJECT, "Coroutine reference is invalid");
         return ks_script_create_invalid_obj(ctx);
     }
 
@@ -628,8 +825,7 @@ KS_API Ks_Script_Function_Call_Result ks_script_coroutine_resume(Ks_Script_Ctx c
     int status = lua_resume(co, L, (int)n_args, &n_results);
 
     if (status == LUA_ERRRUN || status == LUA_ERRMEM || status == LUA_ERRERR) {
-        SET_SCRIPT_ERROR(sctx, KS_SCRIPT_ERROR_RUNTIME,
-            "Cannot resume coroutine in error state: %s",
+        ks_epush_s_fmt(KS_ERROR_LEVEL_BASE, "ScriptEngine", KS_SCRIPT_ERROR_INVALID_OPERATION,"Cannot resume coroutine in error state: %s",
             lua_tostring(co, -1) ? lua_tostring(co, -1) : "unknown");
         return ks_script_create_invalid_obj(ctx);
     }
@@ -664,9 +860,7 @@ KS_API Ks_Script_Function_Call_Result ks_script_coroutine_resume(Ks_Script_Ctx c
         luaL_traceback(co, co, err_msg, 1);
         const char* full_trace = lua_tostring(co, -1);
 
-        KS_LOG_ERROR("[LUA COROUTINE EXCEPTION] %s", full_trace);
-
-        sctx->set_internal_error(KS_SCRIPT_ERROR_RUNTIME, err_msg ? err_msg : "Coroutine resume failed");
+        ks_epush_s_fmt(KS_ERROR_LEVEL_BASE, "ScriptEngine", KS_SCRIPT_ERROR_INVALID_OPERATION, "Coroutine resume failed exception: %s. ", full_trace);
 
         lua_pop(co, 2);
 
@@ -846,18 +1040,18 @@ KS_API Ks_Script_Usertype_Builder ks_script_usertype_begin(Ks_Script_Ctx ctx, ks
 KS_API Ks_Script_Usertype_Builder ks_script_usertype_begin_from_ref(Ks_Script_Ctx ctx, const char* type_name) {
 
     if (!ctx || !type_name) {
-        KS_LOG_ERROR("[Script] Invalid parameters for usertype_begin_from_ref");
+        ks_epush(KS_ERROR_LEVEL_BASE, "Core", "ScriptEngine", KS_ERROR_INVALID_ARGUMENT, "Invalid parameters for usertype_begin_from_ref");
         return nullptr;
     }
 
     const Ks_Type_Info* info = ks_reflection_get_type(type_name);
     if (!info) {
-        KS_LOG_ERROR("[Script] Reflection type '%s' not found.", type_name);
+        ks_epush_fmt(KS_ERROR_LEVEL_BASE, "ReflectionSystem", "ScriptEngine", KS_REFLECTION_TYPE_NOT_FOUND, "Reflection type '%s' not found.", type_name);
         return nullptr;
     }
 
     if (info->size == 0) {
-        KS_LOG_WARN("[Script] Type '%s' has zero size - may not be instantiable", type_name);
+        ks_epush_fmt(KS_ERROR_LEVEL_WARNING, "Core", "ScriptEngine", KS_ERROR_ZERO_SIZE, "Type '%s' has zero size - may not be instantiable", type_name);
     }
 
     auto b = ks_script_usertype_begin(ctx, type_name, info->size);
@@ -954,7 +1148,7 @@ KS_API ks_no_ret ks_script_usertype_add_metamethod(Ks_Script_Usertype_Builder bu
     auto* b = static_cast<KsUsertypeBuilder*>(builder);
     if (!b || !sigs || count == 0) return;
 
-    const char* mt_name = ks_metamethod_to_str(mt); // es. "__add"
+    const char* mt_name = ks_metamethod_to_str(mt);
     if (!mt_name) return;
 
     std::vector<MethodInfo> infos = convert_sigs(sigs, count, mt_name);
@@ -1226,7 +1420,7 @@ KS_API ks_no_ret ks_script_register_enum_impl(Ks_Script_Ctx ctx, ks_str enum_nam
     lua_getglobal(L, enum_name);
     if (!lua_isnil(L, -1)) {
         lua_pop(L, 1);
-        KS_LOG_WARN("[Script] Overwriting existing global '%s' with enum", enum_name);
+        ks_epush_s_fmt(KS_ERROR_LEVEL_WARNING, "ScriptEngine", KS_SCRIPT_ERROR_INVALID_OPERATION, "Overwriting existing global '%s' with enum", enum_name);
     }
     else {
         lua_pop(L, 1);
@@ -1238,7 +1432,7 @@ KS_API ks_no_ret ks_script_register_enum_impl(Ks_Script_Ctx ctx, ks_str enum_nam
         auto it = value_to_name.find(members[i].value);
 
         if (it != value_to_name.end()) {
-            KS_LOG_WARN("[Script] Enum '%s' has duplicate value %lld for '%s' and '%s'",
+            ks_epush_s_fmt(KS_ERROR_LEVEL_WARNING, "ScriptEngine", KS_SCRIPT_ERROR_INVALID_OPERATION, "[Script] Enum '%s' has duplicate value %lld for '%s' and '%s'",
                 enum_name, members[i].value, it->second.c_str(), members[i].name);
         }
 
@@ -1420,27 +1614,52 @@ static void* lua_custom_Alloc(void* ud, void* ptr, size_t osize, size_t nsize) {
     return ks_realloc(ptr, nsize);
 }
 
-void set_script_error(KsScriptEngineCtx* ctx, Ks_Script_Error error, const char* function, const char* details){
-    char buffer[1024];
-    snprintf(buffer, sizeof(buffer), "%s: %s", function, details);
-    ctx->set_internal_error(error, buffer);
+static int internal_load_buffer(Ks_Script_Ctx ctx, const char* buff, size_t sz, const char* name) {
+    KsScriptEngineCtx* engine = (KsScriptEngineCtx*)ctx;
+
+    ks_str processed = ks_preprocessor_process(engine->get_preproc(), buff);
+
+    lua_State* L = engine->get_raw_state();
+    int status = luaL_loadbuffer(L, processed, strlen(processed), name);
+
+    ks_dealloc((void*)processed);
+    return status;
 }
 
 static int ks_script_error_handler(lua_State* L) {
-    const char* msg = lua_tostring(L, 1);
-    if (msg == NULL) {
-        if (luaL_callmeta(L, 1, "__tostring") && lua_type(L, -1) == LUA_TSTRING) {
-            return 1;
-        }
-        else {
-            msg = lua_pushfstring(L, "(error object is a %s value)", luaL_typename(L, 1));
-        }
+    ks_str owner = "ScriptEngine";
+    ks_str source = "ScriptEngine";
+    ks_uint64 local_code = KS_SCRIPT_ERROR_RUNTIME;
+    const char* message = nullptr;
+
+    if (lua_istable(L, 1)) {
+        lua_getfield(L, 1, "owner");
+        if (lua_isstring(L, -1)) owner = lua_tostring(L, -1);
+        lua_pop(L, 1);
+
+        lua_getfield(L, 1, "source");
+        if (lua_isstring(L, -1)) source = lua_tostring(L, -1);
+        lua_pop(L, 1);
+
+        lua_getfield(L, 1, "code");
+        if (lua_isinteger(L, -1)) local_code = lua_tointeger(L, -1);
+        lua_pop(L, 1);
+
+        lua_getfield(L, 1, "message");
+        message = lua_tostring(L, -1);
+    }
+    else {
+        message = lua_tostring(L, 1);
     }
 
-    luaL_traceback(L, L, msg, 1);
+    if (message == NULL) {
+        message = lua_pushfstring(L, "(error object is a %s value)", luaL_typename(L, 1));
+    }
 
+    luaL_traceback(L, L, message, 1);
     const char* full_trace = lua_tostring(L, -1);
-    KS_LOG_ERROR("[LUA EXCEPTION] %s", full_trace);
+
+    ks_epush(KS_ERROR_LEVEL_BASE, owner, source, local_code, full_trace);
 
     return 1;
 }
@@ -1470,18 +1689,18 @@ KS_API Ks_Script_Object ks_script_get_global(Ks_Script_Ctx ctx, ks_str name)
 KS_API Ks_Script_Function ks_script_load_cstring(Ks_Script_Ctx ctx, ks_str string)
 {
     if (!ctx) {
-        SET_SCRIPT_ERROR(nullptr, KS_SCRIPT_ERROR_INVALID_ARGUMENT,
-            "Context is null");
+        ks_epush(KS_ERROR_LEVEL_BASE, "Core", "ScriptEngine", KS_ERROR_INVALID_ARGUMENT, "Context is null");
         return ks_script_create_invalid_obj(ctx);
     }
 
     auto* sctx = static_cast<KsScriptEngineCtx*>(ctx);
     lua_State* L = sctx->get_raw_state();
 
-    if (luaL_loadstring(L, string) != LUA_OK) {
+    int status = internal_load_buffer(ctx, string, strlen(string), string);
+
+    if (status != LUA_OK) {
         const char* err = lua_tostring(L, -1);
-        SET_SCRIPT_ERROR(sctx, KS_SCRIPT_ERROR_RUNTIME,
-            "Failed to load string: %s", err ? err : "Unknown error");
+        ks_epush_s_fmt(KS_ERROR_LEVEL_BASE, "ScriptEngine", KS_SCRIPT_ERROR_ON_LOAD, "Failed to load string: %s", err ? err : "Unknown error");
         lua_pop(L, 1);
         return ks_script_create_invalid_obj(ctx);
     }
@@ -1499,10 +1718,22 @@ KS_API Ks_Script_Function ks_script_load_file(Ks_Script_Ctx ctx, ks_str file_pat
 
     auto* sctx = static_cast<KsScriptEngineCtx*>(ctx);
     lua_State* L = sctx->get_raw_state();
+    
+    std::ifstream file(file_path);
+    if (!file.is_open()) {
+        ks_epush_s_fmt(KS_ERROR_LEVEL_BASE, "ScriptEngine", KS_SCRIPT_ERROR_ON_LOAD, "File '%s' not found", file_path);
+        return ks_script_create_invalid_obj(ctx);
+    }
 
-    if (luaL_loadfile(L, file_path) != LUA_OK) {
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+    std::string content = buffer.str();
+
+    int status = internal_load_buffer(ctx, content.c_str(), content.length(), file_path);
+
+    if (status != LUA_OK) {
         const char* err = lua_tostring(L, -1);
-        sctx->set_internal_error(KS_SCRIPT_ERROR_RUNTIME, err ? err : "Failed to load file");
+        ks_epush_s(KS_ERROR_LEVEL_BASE, "ScriptEngine", KS_SCRIPT_ERROR_ON_LOAD, err ? err : "Failed to load file");
         lua_pop(L, 1);
         return ks_script_create_invalid_obj(ctx);
     }
@@ -1527,16 +1758,17 @@ KS_API Ks_Script_Function_Call_Result ks_script_do_cstring(Ks_Script_Ctx ctx, ks
     lua_pushcfunction(L, ks_script_error_handler);
     int err_func_idx = lua_gettop(L);
 
-    if (luaL_loadstring(L, string) != LUA_OK) {
+    int status = internal_load_buffer(ctx, string, strlen(string), string);
+
+    if (status != LUA_OK) {
         const char* err = lua_tostring(L, -1);
-        sctx->set_internal_error(KS_SCRIPT_ERROR_RUNTIME, err ? err : "Syntax Error");
+        ks_epush_s(KS_ERROR_LEVEL_BASE, "ScriptEngine", KS_SCRIPT_ERROR_SYNTAX, err ? err : "Syntax Error");
+        lua_settop(L, top_before);
         return ks_script_create_invalid_obj(ctx);
     }
 
     if (lua_pcall(L, 0, LUA_MULTRET, err_func_idx) != LUA_OK) {
-        const char* err = lua_tostring(L, -1);
-        sctx->set_internal_error(KS_SCRIPT_ERROR_RUNTIME, err ? err : "Runtime Error");
-        lua_pop(L, 2);
+        lua_settop(L, top_before);
         return ks_script_create_invalid_obj(ctx);
     }
 
@@ -1580,17 +1812,27 @@ KS_API Ks_Script_Function_Call_Result ks_script_do_file(Ks_Script_Ctx ctx, ks_st
 
     int top_before = lua_gettop(L);
 
-    if (luaL_loadfile(L, file_path) != LUA_OK) {
+    std::ifstream file(file_path);
+    if (!file.is_open()) {
+        ks_epush_s_fmt(KS_ERROR_LEVEL_BASE, "ScriptEngine", KS_SCRIPT_ERROR_ON_LOAD, "File '%s' not found", file_path);
+        return ks_script_create_invalid_obj(ctx);
+    }
+
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+    std::string content = buffer.str();
+
+    int status = internal_load_buffer(ctx, content.c_str(), content.length(), file_path);
+
+    if (status != LUA_OK) {
         const char* err = lua_tostring(L, -1);
-        sctx->set_internal_error(KS_SCRIPT_ERROR_RUNTIME, err ? err : "Failed to load file");
+        ks_epush_s(KS_ERROR_LEVEL_BASE, "ScriptEngine", KS_SCRIPT_ERROR_ON_LOAD, err ? err : "Failed to load file");
         lua_pop(L, 2);
         return ks_script_create_invalid_obj(ctx);
     }
 
     if (lua_pcall(L, 0, LUA_MULTRET, err_func_idx) != LUA_OK) {
-        const char* err = lua_tostring(L, -1);
-        sctx->set_internal_error(KS_SCRIPT_ERROR_RUNTIME, err ? err : "Runtime Error in file");
-        lua_pop(L, 2);
+        lua_remove(L, err_func_idx);
         return ks_script_create_invalid_obj(ctx);
     }
 
@@ -1635,7 +1877,7 @@ KS_API Ks_Script_Object ks_script_require(Ks_Script_Ctx ctx, ks_str module_name)
 
     if (lua_pcall(L, 1 ,1, 0) != LUA_OK) {
         const char* err = lua_tostring(L, -1);
-        sctx->set_internal_error(KS_SCRIPT_ERROR_RUNTIME, err ? err : "Failed to require module");
+        ks_epush_s(KS_ERROR_LEVEL_BASE, "ScriptEngine", KS_SCRIPT_ERROR_ON_LOAD, err ? err : "Failed to require module");
         lua_pop(L, 1);
         return ks_script_create_invalid_obj(ctx);
     }
@@ -2136,7 +2378,7 @@ KS_API ks_str ks_script_obj_as_cstring(Ks_Script_Ctx ctx, Ks_Script_Object obj)
 
     char* copy = (char*)ks_alloc_debug(len + 1, KS_LT_FRAME, KS_TAG_SCRIPT, "StringCopy");
     if (!copy) {
-        KS_LOG_ERROR("[Script] Frame Allocator OOM converting string!");
+        ks_epush(KS_ERROR_LEVEL_BASE, "MemoryManager", "ScriptEngine", KS_MEMORY_ERROR_OOM, "Frame Allocator OOM converting string!");
         lua_pop(L, 1);
         return nullptr;
     }
@@ -2370,8 +2612,7 @@ KS_API ks_no_ret ks_script_obj_set_metatable(Ks_Script_Ctx ctx, Ks_Script_Object
 
     if (!lua_isuserdata(L, -1) && !lua_istable(L, -1)) {
         lua_pop(L, 1);
-        SET_SCRIPT_ERROR(sctx, KS_SCRIPT_ERROR_INVALID_OPERATION,
-            "Cannot set metatable on object of type %s",
+        ks_epush_s_fmt(KS_ERROR_LEVEL_BASE, "ScriptEngine", KS_SCRIPT_ERROR_INVALID_OPERATION, "Cannot set metatable on object of type %s",
             lua_typename(L, lua_type(L, -1)));
         return;
     }
@@ -2380,7 +2621,7 @@ KS_API ks_no_ret ks_script_obj_set_metatable(Ks_Script_Ctx ctx, Ks_Script_Object
 
     if (!lua_istable(L, -1)) {
         lua_pop(L, 2);
-        SET_SCRIPT_ERROR(sctx, KS_SCRIPT_ERROR_INVALID_ARGUMENT,
+        ks_epush_s(KS_ERROR_LEVEL_BASE, "ScriptEngine", KS_SCRIPT_ERROR_INVALID_OBJECT,
             "Metatable must be a table");
         return;
     }
@@ -2551,39 +2792,24 @@ ks_size ks_script_debug_get_registry_size(Ks_Script_Ctx ctx)
     return total;
 }
 
-KS_API Ks_Script_Error ks_script_get_last_error(Ks_Script_Ctx ctx)
-{
-    if (!ctx) return KS_SCRIPT_ERROR_CTX_NOT_CREATED;
-
-    auto* sctx = static_cast<KsScriptEngineCtx*>(ctx);
-
-    auto error_info = sctx->get_error_info();
-    return error_info.error;
-}
-
-KS_API ks_str ks_script_get_last_error_str(Ks_Script_Ctx ctx)
-{
-    if (!ctx) return NULL;
-
-    auto* sctx = static_cast<KsScriptEngineCtx*>(ctx);
-
-    auto error_info = sctx->get_error_info();
-    return error_info.message;
-}
-
 KS_API Ks_Script_Error_Info ks_script_get_last_error_info(Ks_Script_Ctx ctx)
 {
+    Ks_Script_Error_Info info;
+    memset(&info, 0, sizeof(Ks_Script_Error_Info));
+    info.error = KS_SCRIPT_ERROR_NONE;
+
     if (!ctx) {
-        Ks_Script_Error_Info info;
         info.error = KS_SCRIPT_ERROR_CTX_NOT_CREATED;
         info.message = "Ks_Script_Ctx was not created!";
+        return info;
     }
 
     auto* sctx = static_cast<KsScriptEngineCtx*>(ctx);
+    auto internal_info = sctx->get_error_info();
+    info.error = internal_info.error;
+    info.message = internal_info.message;
 
-
-    auto error_info = sctx->get_error_info();
-    return error_info;
+    return info;
 }
 
 KS_API ks_no_ret ks_script_clear_error(Ks_Script_Ctx ctx)
@@ -2613,9 +2839,7 @@ KS_API ks_no_ret ks_script_table_set(Ks_Script_Ctx ctx, Ks_Script_Table tbl, Ks_
     if (!ctx) return;
 
     if (!ks_script_obj_is(ctx, tbl, KS_TYPE_SCRIPT_TABLE)) {
-        SET_SCRIPT_ERROR(static_cast<KsScriptEngineCtx*>(ctx),
-            KS_SCRIPT_ERROR_INVALID_OBJECT,
-            "First argument must be a table");
+        ks_epush(KS_ERROR_LEVEL_BASE, "Core", "ScriptEngine", KS_ERROR_INVALID_ARGUMENT, "First argument must be a table");
         return;
     }
 
@@ -2626,8 +2850,7 @@ KS_API ks_no_ret ks_script_table_set(Ks_Script_Ctx ctx, Ks_Script_Table tbl, Ks_
 
     if (!lua_istable(L, -1)) {
         lua_pop(L, 1);
-        SET_SCRIPT_ERROR(sctx, KS_SCRIPT_ERROR_INVALID_OBJECT,
-            "Table reference points to non-table object");
+        ks_epush_s(KS_ERROR_LEVEL_BASE, "ScriptEngine", KS_SCRIPT_ERROR_INVALID_OBJECT, "Table reference points to non-table object");
         return;
     }
 
@@ -2847,8 +3070,7 @@ Ks_Script_Object ks_script_get_upvalue(Ks_Script_Ctx ctx, ks_upvalue_idx n)
     if (sctx->current_frame().upval_offset == 0) idx = (int)(n + 1);
 
     if (idx < 1 || idx > 256) {
-        SET_SCRIPT_ERROR(sctx, KS_SCRIPT_ERROR_INVALID_ARGUMENT,
-            "Upvalue index out of bounds: %d (valid: 1-256)", idx);
+        ks_epush_fmt(KS_ERROR_LEVEL_BASE, "Core", "ScriptEngine", KS_ERROR_INVALID_ARGUMENT, "Upvalue index out of bounds: %d (valid: 1-256)", idx);
         return ks_script_create_invalid_obj(ctx);
     }
 
@@ -2871,8 +3093,7 @@ KS_API ks_no_ret ks_script_func_call(Ks_Script_Ctx ctx, Ks_Script_Function f, ks
 
     int current_top = lua_gettop(L);
     if (current_top < (int)n_args) {
-        SET_SCRIPT_ERROR(sctx, KS_SCRIPT_ERROR_STACK_OVERFLOW,
-            "Not enough arguments on stack. Expected %zu, found %d",
+        ks_epush_fmt(KS_ERROR_LEVEL_BASE, "Core", "ScriptEngine", KS_ERROR_INVALID_ARGUMENT, "Not enough arguments on stack. Expected %zu, found %d",
             n_args, current_top);
         return;
     }
@@ -2885,8 +3106,6 @@ KS_API ks_no_ret ks_script_func_call(Ks_Script_Ctx ctx, Ks_Script_Function f, ks
     lua_insert(L, -(int)n_args - 1);
     
     if (lua_pcall(L, (int)n_args, (int)n_rets, err_func_idx) != LUA_OK) {
-        ks_str err = lua_tostring(L, -1);
-        sctx->set_internal_error(KS_SCRIPT_ERROR_RUNTIME, err ? err : "Function call failed");
         lua_pop(L, 2);
     }
     else {
@@ -3098,6 +3317,14 @@ static int overload_dispatcher_thunk(lua_State* L) {
         lua_pop(L, 1); 
     }
 
+    lua_newtable(L);
+    lua_pushstring(L, "ScriptEngine");
+    lua_setfield(L, -2, "owner");
+    lua_pushstring(L, "ScriptEngine");
+    lua_setfield(L, -2, "source");
+    lua_pushinteger(L, KS_SCRIPT_ERROR_OVERLOAD_NOT_FOUND);
+    lua_setfield(L, -2, "code");
+
     luaL_Buffer msg;
     luaL_buffinit(L, &msg);
 
@@ -3221,6 +3448,7 @@ static int overload_dispatcher_thunk(lua_State* L) {
     }
 
     luaL_pushresult(&msg);
+    lua_setfield(L, -2, "message");
     return lua_error(L);
 }
 

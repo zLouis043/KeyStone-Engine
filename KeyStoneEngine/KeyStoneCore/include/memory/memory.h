@@ -16,6 +16,11 @@ extern "C" {
 #include <stdint.h>
 #include <stddef.h>
 
+typedef enum {
+    KS_MEMORY_ERROR_OOM,
+    KS_MEMORY_ERROR_GARBAGE_FOUND
+} Ks_Memory_Error;
+
 /**
 * @brief Allocation lifetime strategy.
 * Defines how long the memory is expected to persist.

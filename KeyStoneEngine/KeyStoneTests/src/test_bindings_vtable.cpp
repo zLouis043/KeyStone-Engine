@@ -55,7 +55,7 @@ TEST_CASE("Bindings: Reflection VTable & FFI") {
 
         auto res = ks_script_do_cstring(ctx, script);
         if (!ks_script_call_succeded(ctx, res)) {
-            FAIL(ks_script_get_last_error_str(ctx));
+            FAIL(ks_error_get_last_error().message);
         }
         CHECK(strcmp(ks_script_obj_as_cstring(ctx, ks_script_call_get_return(ctx, res)), "OK") == 0);
     }
@@ -105,7 +105,7 @@ TEST_CASE("Bindings: Reflection VTable & FFI") {
 
         auto res = ks_script_do_cstring(ctx, script);
         if (!ks_script_call_succeded(ctx, res)) {
-            FAIL(ks_script_get_last_error_str(ctx));
+            FAIL(ks_error_get_last_error().message);
         }
         CHECK(strcmp(ks_script_obj_as_cstring(ctx, ks_script_call_get_return(ctx, res)), "OK") == 0);
     }
@@ -128,7 +128,7 @@ TEST_CASE("Bindings: Reflection VTable & FFI") {
 
         auto res = ks_script_do_cstring(ctx, script);
         if (!ks_script_call_succeded(ctx, res)) {
-            FAIL(ks_script_get_last_error_str(ctx));
+            FAIL(ks_error_get_last_error().message);
         }
         CHECK(strcmp(ks_script_obj_as_cstring(ctx, ks_script_call_get_return(ctx, res)), "OK") == 0);
     }
@@ -170,7 +170,7 @@ TEST_CASE("Bindings: Reflection VTable & FFI") {
         auto res = ks_script_do_cstring(ctx, script);
 
         if (!ks_script_call_succeded(ctx, res)) {
-            FAIL(ks_script_get_last_error_str(ctx));
+            FAIL(ks_error_get_last_error().message);
         }
 
         CHECK(strcmp(ks_script_obj_as_cstring(ctx, ks_script_call_get_return_at(ctx, res, 1)), "PowerValue(69)") == 0);

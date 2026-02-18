@@ -1,6 +1,7 @@
 #include "../include/ecs/ecs.h"
 #include "../include/core/reflection.h"
 #include "../include/core/log.h"
+#include "../include/core/error.h"
 #include "../include/memory/memory.h"
 
 #include <flecs.h>
@@ -18,6 +19,11 @@ extern "C" {
     const Ks_Entity KS_PHASE_PRE_STORE = (Ks_Entity)EcsPreStore;
     const Ks_Entity KS_PHASE_ON_STORE = (Ks_Entity)EcsOnStore;
 }
+
+enum ECSErros {
+    SYSTEM_CREATION_FAIL,
+    QUERY_CREATION_FAIL
+};
 
 struct Ks_Ecs_World_Impl {
     ecs_world_t* ecs;
@@ -228,7 +234,7 @@ void ks_ecs_create_system(Ks_Ecs_World world, const char* name, const char* filt
         ecs_enable(w->ecs, sys_entity, true);
     }
     else {
-        KS_LOG_ERROR("ECS: Failed to create system '%s'", name);
+        ks_epush_s_fmt(KS_ERROR_LEVEL_BASE, "ECS", ECSErros::SYSTEM_CREATION_FAIL, "Failed to create system '%s'", name);
     }
 }
 
@@ -240,7 +246,7 @@ void ks_ecs_run_query(Ks_Ecs_World world, const char* filter, Ks_System_Func fun
 
     ecs_query_t* q = ecs_query_init(w->ecs, &desc);
     if (!q) {
-        KS_LOG_ERROR("ECS: Failed to create query for filter '%s'", filter);
+        ks_epush_s_fmt(KS_ERROR_LEVEL_BASE, "ECS", ECSErros::QUERY_CREATION_FAIL, "Failed to create query for filter '%s'", filter);
         return;
     }
 

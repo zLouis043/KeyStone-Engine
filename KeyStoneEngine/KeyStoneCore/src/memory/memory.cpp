@@ -1,4 +1,6 @@
+#include "memory/memory.h"
 #include "memory/memory.hpp"
+#include "../include/core/error.h"
 
 #include <algorithm>
 #include <string.h>
@@ -83,6 +85,9 @@ MemoryManager::MemoryManager() :
     };
 
     set_resource_pools_config(default_pools);
+
+    ks_error_make_module_prefix("MemoryManager");
+
     is_initialized = true;
 }
 
@@ -144,6 +149,7 @@ void MemoryManager::shutdown() {
 
 void* MemoryManager::alloc(size_t size_in_bytes, Lifetime lt, Tag tag, const char* debug_name, size_t count)
 {
+    if (s_shutdown_flag.load()) return nullptr;
     size_t user_size = size_in_bytes * count;
 
     size_t header_size = sizeof(AllocationHeader);
@@ -196,6 +202,8 @@ void* MemoryManager::alloc(size_t size_in_bytes, Lifetime lt, Tag tag, const cha
 
 void* MemoryManager::realloc(void* ptr, size_t new_size_in_bytes)
 {
+    if(s_shutdown_flag.load()) return nullptr;
+
     if (!ptr) return alloc(new_size_in_bytes, Lifetime::USER_MANAGED, Tag::SCRIPT, "realloc_new");
 
     size_t header_size = sizeof(AllocationHeader);
@@ -346,7 +354,7 @@ void MemoryManager::cleanup_user_managed_allocations() {
     }
 
     if (freed_count > 0) {
-        KS_LOG_WARN("MemoryManager cleaned up %d leaked allocations at shutdown.", freed_count);
+        ks_epush_s_fmt(KS_ERROR_LEVEL_WARNING, "MemoryManager", KS_MEMORY_ERROR_GARBAGE_FOUND, "Cleaned up % d leaked allocations at shutdown.", freed_count);
     }
 }
 

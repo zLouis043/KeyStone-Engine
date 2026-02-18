@@ -41,7 +41,7 @@ TEST_CASE("Performance Benchmarks") {
         long long duration = measure_ms([&]() {
             Ks_Script_Function_Call_Result res = ks_script_do_cstring(ctx, script);
             if (!ks_script_call_succeded(ctx, res)) {
-                CHECK_MESSAGE(false, ks_script_get_last_error_str(ctx));
+                CHECK_MESSAGE(false, ks_error_get_last_error().message);
             }
             });
 

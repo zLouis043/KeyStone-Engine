@@ -343,7 +343,7 @@ TEST_CASE("C API: Script Engine Suite") {
             Ks_Script_Function_Call_Result res = ks_script_do_cstring(ctx, script);
 
             if (!ks_script_call_succeded(ctx, res)) {
-                FAIL(ks_script_get_last_error_str(ctx));
+                FAIL(ks_error_get_last_error().message);
             }
 
             CHECK(ks_script_call_get_returns_count(ctx, res) == 3);
@@ -441,7 +441,7 @@ TEST_CASE("C API: Script Engine Suite") {
             Ks_Script_Function_Call_Result res = ks_script_do_cstring(ctx, script);
 
             if (!ks_script_call_succeded(ctx, res)) {
-                FAIL(ks_script_get_last_error_str(ctx));
+                FAIL(ks_error_get_last_error().message);
             }
 
             CHECK(ks_script_call_get_returns_count(ctx, res) == 5);
@@ -529,7 +529,8 @@ TEST_CASE("C API: Script Engine Suite") {
 
             CHECK(ks_script_call_succeded(ctx, res) == ks_false);
 
-            const char* err = ks_script_get_last_error_str(ctx);
+            auto einfo = ks_error_get_last_error();
+            const char* err = einfo.message;
             if (err) {
                 KS_LOG_INFO("Expected Error: %s", err);
                 CHECK(strstr(err, "[1] userdata (DummyType)") != nullptr);
@@ -540,6 +541,54 @@ TEST_CASE("C API: Script Engine Suite") {
             }
 
         } ks_script_end_scope(ctx);
+    }
+
+    SUBCASE("Macro @reverse") {
+        const char* src = R"(
+            @macro reverse {
+                onGet = function(ctx, sb)
+                    local s = ctx.symbol
+                    local rev = string.reverse(s)
+                    sb:append('"' .. rev .. '"')
+                    return true
+                end
+            }
+
+            result = @reverse "OLE"
+        )";
+
+        Ks_Script_Function_Call_Result res = ks_script_do_cstring(ctx, src);
+        Ks_Error_Info ei = ks_error_get_last_error();
+        if (ei.message) {
+            KS_LOG_ERROR("Exec error : %s", ei.message);
+        }
+        REQUIRE(ks_script_call_succeded(ctx, res));
+
+        // Verifichiamo il risultato globale
+        Ks_Script_Object val = ks_script_get_global(ctx, "result");
+        CHECK(ks_script_obj_type(ctx, val) == KS_TYPE_CSTRING);
+        CHECK(std::string(ks_script_obj_as_cstring(ctx, val)) == "ELO");
+    }
+
+    SUBCASE("Macro @add (Function Call)") {
+        const char* src = R"(
+            @macro add {
+                onCall = function(ctx, sb)
+                    local a = ctx.args[1]
+                    local b = ctx.args[2]
+                    sb:append('(' .. a .. ' + ' .. b .. ')')
+                    return true
+                    end
+            }
+
+        res = @add(10, 20)
+        )";
+
+        Ks_Script_Function_Call_Result res = ks_script_do_cstring(ctx, src);
+        REQUIRE(ks_script_call_succeded(ctx, res));
+
+        Ks_Script_Object val = ks_script_get_global(ctx, "res");
+        CHECK(ks_script_obj_as_integer(ctx, val) == 30);
     }
 
     ks_script_destroy_ctx(ctx);

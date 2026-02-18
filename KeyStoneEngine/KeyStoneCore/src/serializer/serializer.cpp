@@ -1,7 +1,9 @@
 #include "../../include/serialization/serializer.h"
 #include "../../include/memory/memory.h"
 #include "../../include/core/log.h"
+#include "../../include/core/error.h"
 #include "../../include/core/reflection.h"
+#include "../../include/filesystem/vfs.h"
 
 #include <rapidjson/document.h>
 #include <rapidjson/prettywriter.h>
@@ -306,21 +308,22 @@ KS_API ks_bool ks_serializer_load_from_string(Ks_Serializer ser, ks_str json_str
     s->node_pool.clear();
     s->doc.SetObject();
     if (s->doc.Parse(json_string).HasParseError()) {
-        KS_LOG_ERROR("[Serializer] Parse error: %s (Offset: %u)", GetParseError_En(s->doc.GetParseError()), s->doc.GetErrorOffset());
+        ks_epush_s_fmt(KS_ERROR_LEVEL_BASE, "Serializer", 0, "Parse error: %s (Offset: %u)", GetParseError_En(s->doc.GetParseError()), s->doc.GetErrorOffset());
         return ks_false;
     }
     return ks_true;
 }
 
 KS_API ks_bool ks_serializer_load_from_file(Ks_Serializer ser, ks_str path) {
-    std::ifstream ifs(path);
-    if (!ifs.is_open()) {
-        KS_LOG_ERROR("[Serializer] Failed to open file: %s", path);
+    ks_size file_size = 0;
+    ks_str buffer = ks_vfs_read_file(path, &file_size);
+    if (!buffer) {
+        ks_epush_fmt(KS_ERROR_LEVEL_BASE, "VFS",  "Serializer", KS_VFS_ERROR_FAILED_TO_OPEN_FILE, "Failed to open file: %s", path);
         return ks_false;
     }
-    std::stringstream buffer;
-    buffer << ifs.rdbuf();
-    return ks_serializer_load_from_string(ser, buffer.str().c_str());
+    ks_bool success = ks_serializer_load_from_string(ser, buffer);
+    ks_dealloc((void*)buffer);
+    return success;
 }
 
 KS_API ks_str ks_serializer_dump_to_string(Ks_Serializer ser) {
@@ -445,7 +448,7 @@ KS_API Ks_Json ks_json_serialize(Ks_Serializer ser, const void* instance, ks_str
 
     const Ks_Type_Info* info = ks_reflection_get_type(type_name);
     if (!info) {
-        KS_LOG_ERROR("[Serializer] Serialize failed: Type '%s' not found.", type_name);
+        ks_epush_fmt(KS_ERROR_LEVEL_BASE, "ReflectionSystem", "Serializer", KS_REFLECTION_TYPE_NOT_FOUND, "Serialize failed: Type '%s' not found.", type_name);
         return ks_json_create_null(ser);
     }
 
@@ -464,7 +467,7 @@ KS_API ks_bool ks_json_deserialize(Ks_Serializer ser, void* instance, ks_str typ
     if (!ser || !instance || !type_name || !json_node) return false;
     const Ks_Type_Info* info = ks_reflection_get_type(type_name);
     if (!info) {
-        KS_LOG_ERROR("[Serializer] Deserialize failed: Type '%s' not found.", type_name);
+        ks_epush_fmt(KS_ERROR_LEVEL_BASE, "ReflectionSystem", "Serializer", KS_REFLECTION_TYPE_NOT_FOUND, "Deserialize failed: Type '%s' not found.", type_name);
         return false;
     }
     return deserialize_type_recursive(ser, instance, info, json_node);

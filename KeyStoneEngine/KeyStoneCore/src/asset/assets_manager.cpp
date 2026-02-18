@@ -1,4 +1,6 @@
 #include "../../include/asset/assets_manager.h"
+#include "../../include/core/error.h"
+#include "../../include/core/core_errors.h"
 #include "../../include/filesystem/file_watcher.h"
 #include "../../include/profiler/profiler.h"
 
@@ -84,6 +86,14 @@ private:
 	Ks_Handle_Id asset_type_id;
 };
 
+enum AssetsError {
+	FAILED_TO_REGISTER_ASSET,
+	INVALID_ASSET_INTERFACE,
+	INVALID_ASSET_HANDLE, 
+	RELEASE_DATA_ON_ASYNC_LOAD,
+	FAILED_ASYNC_LOAD
+};
+
 static void on_asset_file_changed(ks_str path, ks_ptr user_data) {
 	AssetManager_Impl* am = static_cast<AssetManager_Impl*>(user_data);
 	am->reload_asset(path);
@@ -95,12 +105,12 @@ AssetManager_Impl::AssetManager_Impl()
 {
 	asset_type_id = ks_handle_register("Asset");
 	if (asset_type_id == KS_INVALID_ID) {
-		KS_LOG_ERROR("[Assets] Failed to register asset handle type");
+		ks_epush_s(KS_ERROR_LEVEL_BASE, "AssetManager", AssetsError::FAILED_TO_REGISTER_ASSET, "Failed to register asset handle type");
 	}
 
 	file_watcher = ks_file_watcher_create();
 	if (!file_watcher) {
-		KS_LOG_ERROR("[Assets] Failed to create file watcher");
+		ks_epush(KS_ERROR_LEVEL_BASE, "FileWatcher", "AssetManager", KS_FS_ERROR_FAILED_TO_CREATE, "Failed to create file watcher");
 	}
 }
 
@@ -154,7 +164,7 @@ std::string AssetManager_Impl::resolve_path(const std::string& input_path) {
 		return std::string(buffer);
 	}
 
-	KS_LOG_WARN("[Assets] Failed to resolve VFS path: %s", input_path.c_str());
+	ks_epush_fmt(KS_ERROR_LEVEL_WARNING, "VFS", "AssetManager", KS_VFS_ERROR_FAILED_TO_RESOLVE_PATH, "Failed to resolve VFS path: %s", input_path.c_str());
 	return input_path;
 }
 
@@ -312,7 +322,7 @@ Ks_Handle AssetManager_Impl::load_sync(const std::string& type_name, const std::
 
 	auto it_iface = assets_interfaces.find(type_name);
 	if (it_iface == assets_interfaces.end() || !it_iface->second.load_from_file_fn) {
-		KS_LOG_ERROR("Asset Interface for asset: '%s' invalid", asset_name.c_str());
+		ks_epush_s_fmt(KS_ERROR_LEVEL_BASE, "AssetManager", AssetsError::INVALID_ASSET_INTERFACE, "Asset Interface for asset: '%s' invalid", asset_name.c_str());
 		return KS_INVALID_HANDLE;
 	}
 
@@ -403,13 +413,13 @@ Ks_Handle AssetManager_Impl::load_from_data(const std::string& type_name, const 
 
 	auto it_iface = assets_interfaces.find(type_name);
 	if (it_iface == assets_interfaces.end() || !it_iface->second.load_from_data_fn) {
-		KS_LOG_ERROR("[Assets] Interface for type '%s' missing load_from_data_fn", type_name.c_str());
+		ks_epush_s_fmt(KS_ERROR_LEVEL_BASE, "AssetManager", AssetsError::INVALID_ASSET_INTERFACE, "Interface for type '%s' missing load_from_data_fn", type_name.c_str());
 		return KS_INVALID_HANDLE;
 	}
 
 	Ks_AssetData asset_data = it_iface->second.load_from_data_fn(data);
 	if (asset_data == KS_INVALID_ASSET_DATA) {
-		KS_LOG_ERROR("[Assets] Failed to load asset '%s' from data", asset_name.c_str());
+		ks_epush_s_fmt(KS_ERROR_LEVEL_BASE, "AssetManager", AssetsError::INVALID_ASSET_INTERFACE, "Failed to load asset '%s' from data", asset_name.c_str());
 		return KS_INVALID_HANDLE;
 	}
 
@@ -431,7 +441,7 @@ void AssetManager_Impl::complete_async_load(Ks_Handle handle, Ks_AssetData data,
 	std::lock_guard<std::mutex> lock(assets_mutex);
 
 	if (handle == KS_INVALID_HANDLE) {
-		KS_LOG_ERROR("[Assets] Complete async load called with invalid handle");
+		ks_epush(KS_ERROR_LEVEL_BASE, "Core", "AssetManager", KS_ERROR_INVALID_HANDLE, "Complete async load called with invalid handle");
 		if (success && data && original_iface.destroy_fn) {
 			original_iface.destroy_fn(data);
 		}
@@ -442,7 +452,7 @@ void AssetManager_Impl::complete_async_load(Ks_Handle handle, Ks_AssetData data,
 	auto it = assets_entries.find(handle);
 	if (it == assets_entries.end()) {
 		if (success && data) {
-			KS_LOG_WARN("[Assets] Async load finished for released asset. Destroying data immediately.");
+			ks_epush_s(KS_ERROR_LEVEL_WARNING, "AssetManager", AssetsError::RELEASE_DATA_ON_ASYNC_LOAD, "[Assets] Async load finished for released asset. Destroying data immediately.");
 			if (original_iface.destroy_fn) {
 				original_iface.destroy_fn(data);
 			}
@@ -459,7 +469,7 @@ void AssetManager_Impl::complete_async_load(Ks_Handle handle, Ks_AssetData data,
 	}
 	else {
 		entry.state = KS_ASSET_STATE_FAILED;
-		KS_LOG_ERROR("[Assets] Async Load Failed: %s", entry.asset_name.c_str());
+		ks_epush_s_fmt(KS_ERROR_LEVEL_BASE, "AssetManager", AssetsError::FAILED_ASYNC_LOAD,  "[Assets] Async Load Failed: %s", entry.asset_name.c_str());
 	}
 }
 

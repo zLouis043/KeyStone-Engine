@@ -82,7 +82,6 @@ typedef struct Ks_UserData {
 	ks_size size;
 } Ks_UserData;
 
-#define KS_LSTR(str, len) Ks_LStr { str, len }
 #define KS_USERDATA(data) Ks_UserData { &data, sizeof(data) }
 #define KS_USERDATA_SZ(data, size) Ks_UserData { &data, size }
 

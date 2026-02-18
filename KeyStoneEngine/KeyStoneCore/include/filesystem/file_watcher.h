@@ -7,6 +7,10 @@
 extern "C" {
 #endif
 
+enum Ks_FS_Error {
+	KS_FS_ERROR_FAILED_TO_CREATE
+};
+
 typedef ks_ptr Ks_FileWatcher;
 
 typedef void(*ks_file_change_callback)(ks_str path, ks_ptr user_data);

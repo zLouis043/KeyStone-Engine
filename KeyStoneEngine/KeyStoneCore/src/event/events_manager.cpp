@@ -2,6 +2,8 @@
 #include "../../include/core/reflection.h"
 #include "../../include/core/handle.h"
 #include "../../include/core/log.h"
+#include "../../include/core/error.h"
+#include "../../include/core/core_errors.h"
 #include "../../include/profiler/profiler.h"
 #include "../../include/memory/memory.h"
 #include <vector>
@@ -89,7 +91,7 @@ KS_API Ks_Handle ks_event_manager_register_type(Ks_EventManager em, const char* 
 
     const Ks_Type_Info* info = ks_reflection_get_type(type_name);
     if (!info) {
-        KS_LOG_ERROR("Cannot register event '%s': Type not reflected", type_name);
+        ks_epush_fmt(KS_ERROR_LEVEL_BASE, "ReflectionSystem", "EventManager", KS_REFLECTION_TYPE_NOT_FOUND, "Cannot register event '%s': Type not reflected", type_name);
         return KS_INVALID_HANDLE;
     }
 
@@ -152,7 +154,12 @@ Ks_Handle ks_event_manager_subscribe_ex(Ks_EventManager em, Ks_Handle event_hand
     auto* impl = (Ks_EventManager_Impl*)em;
 
     if (!ks_handle_is_type(event_handle, impl->h_type_event_def)) {
-        KS_LOG_ERROR("Subscribe failed: Invalid event handle type");
+        ks_epush(
+            KS_ERROR_LEVEL_BASE, 
+            "Core",
+            "EventManager", 
+            KS_ERROR_INVALID_HANDLE, 
+            "Subscribe failed: Invalid event handle type");
         return KS_INVALID_HANDLE;
     }
 

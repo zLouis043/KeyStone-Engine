@@ -18,6 +18,13 @@ extern "C" {
  */
 typedef ks_ptr Ks_VFS;
 
+enum Ks_VFS_Error {
+	KS_VFS_ERROR_FAILED_TO_RESOLVE_PATH,
+	KS_VFS_ERROR_PATH_ALREADY_MOUNTED,
+	KS_VFS_ERROR_PATH_DOES_NOT_EXIST,
+	KS_VFS_ERROR_FAILED_TO_OPEN_FILE
+};
+
 /**
  * @brief Init a the Virtual File System.
  */

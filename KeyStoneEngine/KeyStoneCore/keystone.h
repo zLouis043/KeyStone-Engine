@@ -2,6 +2,7 @@
 
 #include "./include/core/defines.h"
 #include "./include/core/types.h"
+#include "./include/core/error.h"
 #include "./include/core/types_binding.h"
 #include "./include/core/reflection.h"
 #include "./include/core/log.h"
@@ -9,6 +10,7 @@
 #include "./include/core/handle.h"
 #include "./include/filesystem/vfs.h"
 #include "./include/script/script_engine.h"
+#include "./include/script/script_preprocess.h"
 #include "./include/asset/asset.h"
 #include "./include/asset/assets_manager.h"
 #include "./include/asset/assets_binding.h"

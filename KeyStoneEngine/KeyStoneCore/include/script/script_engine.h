@@ -199,8 +199,10 @@ typedef enum {
   KS_SCRIPT_ERROR_NONE,
   KS_SCRIPT_ERROR_CTX_NOT_CREATED,
   KS_SCRIPT_ERROR_MEMORY,
+  KS_SCRIPT_ERROR_SYNTAX,
   KS_SCRIPT_ERROR_RUNTIME,
   KS_SCRIPT_ERROR_STACK_OVERFLOW,
+  KS_SCRIPT_ERROR_ON_LOAD,
   KS_SCRIPT_ERROR_INVALID_OPERATION,
   KS_SCRIPT_ERROR_INVALID_ARGUMENT,
   KS_SCRIPT_ERROR_INVALID_OBJECT,
@@ -341,10 +343,6 @@ KS_API Ks_Script_Object ks_script_ref_obj(Ks_Script_Ctx ctx, Ks_Script_Object ob
 KS_API ks_no_ret ks_script_free_obj(Ks_Script_Ctx ctx, Ks_Script_Object obj);
 KS_API ks_size ks_script_debug_get_registry_size(Ks_Script_Ctx ctx);
 
-/** @brief Gets the last error code. */
-KS_API Ks_Script_Error ks_script_get_last_error(Ks_Script_Ctx ctx);
-/** @brief Gets the last error message string. */
-KS_API ks_str ks_script_get_last_error_str(Ks_Script_Ctx ctx);
 /** @brief Gets detailed error information. */
 KS_API Ks_Script_Error_Info ks_script_get_last_error_info(Ks_Script_Ctx ctx);
 /** @brief Clears the last error state. */

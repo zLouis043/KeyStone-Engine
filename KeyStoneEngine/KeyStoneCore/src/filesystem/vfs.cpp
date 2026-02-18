@@ -1,6 +1,7 @@
 #include "../../include/filesystem/vfs.h"
 #include "../../include/memory/memory.h"
 #include "../../include/core/log.h"
+#include "../../include/core/error.h"
 #include "../../include/profiler/profiler.h"
 
 #include <string>
@@ -126,14 +127,14 @@ KS_API ks_bool ks_vfs_mount(ks_str alias, ks_str physical_path, ks_bool overwrit
     std::unique_lock lock(g_vfs->mount_mutex);
 
     if (!overwrite && g_vfs->mount_points.count(alias)) {
-        KS_LOG_WARN("[VFS] Alias '%s' already mounted", alias);
+        ks_epush_s_fmt(KS_ERROR_LEVEL_WARNING, "VFS", KS_VFS_ERROR_PATH_ALREADY_MOUNTED, "[VFS] Alias '%s' already mounted", alias);
         return false;
     }
 
     try {
         fs::path abs_path = fs::absolute(physical_path);
         if (!fs::exists(abs_path)) {
-            KS_LOG_WARN("[VFS] Mounting non-existent path: %s", physical_path);
+            ks_epush_s_fmt(KS_ERROR_LEVEL_WARNING, "VFS", KS_VFS_ERROR_PATH_DOES_NOT_EXIST, "[VFS] Mounting non-existent path: %s", physical_path);
         }
         g_vfs->mount_points[alias] = abs_path.string();
         KS_LOG_INFO("[VFS] Mounted '%s' -> '%s'", alias, abs_path.string().c_str());
@@ -196,7 +197,7 @@ KS_API ks_str ks_vfs_read_file(ks_str virtual_path, ks_size* out_size) {
 
     std::ifstream file(path, std::ios::binary | std::ios::ate);
     if (!file.is_open()) {
-        KS_LOG_ERROR("[VFS] Failed to open file: %s", path.c_str());
+        ks_epush_s_fmt(KS_ERROR_LEVEL_BASE, "VFS", KS_VFS_ERROR_FAILED_TO_OPEN_FILE, "[VFS] Failed to open file: %s", path.c_str());
         return nullptr;
     }
 

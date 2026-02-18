@@ -1,0 +1,4 @@
+
+export sum = (a, b) -> a + b
+export mul = (a, b) -> a * b
+        

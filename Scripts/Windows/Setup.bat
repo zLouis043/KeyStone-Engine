@@ -5,6 +5,12 @@ echo ==========================================
 echo    KeyStone Engine - Windows Setup
 echo ==========================================
 
+echo [0/3] Updating Git Submodules...
+git submodule update --init --recursive
+if %errorlevel% neq 0 (
+    echo [WARNING] Git command failed. Ensure Git is installed and in PATH.
+)
+
 echo [1/3] Checking Premake5...
 where premake5 >nul 2>nul
 if %errorlevel% neq 0 (
@@ -35,6 +41,7 @@ vcpkg.exe install libffi:x64-windows-static
 vcpkg.exe install spdlog:x64-windows-static
 vcpkg.exe install rapidjson:x64-windows-static
 vcpkg.exe install flecs:x64-windows-static
+vcpkg install pegtl:x64-windows-static
 vcpkg.exe install doctest:x64-windows-static
 popd
 
