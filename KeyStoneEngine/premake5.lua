@@ -50,8 +50,14 @@ vcpkg = setupVcpkg()
 
 workspace("Keystone-Engine")
 configurations({ "Debug", "Release" })
-platforms({ "x64" })
+platforms({ "x64", "ARM64" })
 startproject("KeyStoneTests")
+
+filter "platforms:x64"
+        architecture "x86_64"
+
+    filter "platforms:ARM64"
+        architecture "ARM64"
 
 include("./KeyStoneCore/premake5.lua")
 include("./KeyStoneCLI/premake5.lua")
