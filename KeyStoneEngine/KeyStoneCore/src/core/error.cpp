@@ -3,7 +3,7 @@
 
 #include <string.h>
 #include <stdlib.h>
-#include <varargs.h>
+#include <stdarg.h>
 #include <mutex>
 #include <stack>
 #include <unordered_map>
