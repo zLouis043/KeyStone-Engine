@@ -37,7 +37,7 @@ jobs:
             platform: macos
             setup_cmd: cd Scripts/Macos && chmod +x Setup.sh && ./Setup.sh
             premake_action: gmake2
-            build_cmd: make config=debug -j$(sysctl -n hw.ncpu)
+            build_cmd: make config=debug_arm64 -j$(sysctl -n hw.ncpu)
             test_bin: ./KeyStoneEngine/build/bin/Debug/KeyStoneTests
 
     steps:
